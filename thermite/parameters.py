@@ -1,14 +1,5 @@
-from abc import abstractmethod
-from typing import (
-    Any,
-    Callable,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    Union,
-    runtime_checkable,
-)
+from abc import ABC, abstractmethod
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 
@@ -18,8 +9,7 @@ from .type_converters import TypeConverter
 EllipsisType = type(...)
 
 
-@runtime_checkable
-class Parameter(Protocol):
+class Parameter(ABC):
     """Protocol class for Parameters."""
 
     value: Any
@@ -31,15 +21,34 @@ class Parameter(Protocol):
         ...
 
 
-@runtime_checkable
-class Option(Parameter, Protocol):
+@mutable(slots=False, kw_only=True)
+class Option(Parameter):
     """Protocol class for Options."""
 
-    triggers: List[str]
+    prefix: str = ""
+
+    @property
+    @abstractmethod
+    def final_triggers(self) -> Tuple[str, ...]:
+        ...
+
+    @property
+    @abstractmethod
+    def final_trigger_help(self) -> str:
+        ...
+
+    def _adjust_triggers(self, triggers: Sequence[str]) -> Tuple[str, ...]:
+        if self.prefix == "":
+            return tuple(triggers)
+        else:
+            filtered_triggers = filter(lambda x: x.startswith("--"), triggers)
+            return tuple(
+                [f"--{self.prefix}-{trigger[2:]}" for trigger in filtered_triggers]
+            )
 
 
 @mutable(slots=False)
-class BoolOption:
+class BoolOption(Option):
     """Implementation of boolean options."""
 
     descr: str
@@ -48,8 +57,23 @@ class BoolOption:
     value: Union[bool, EllipsisType] = field(default=...)
 
     @property
-    def triggers(self) -> List[str]:
-        return self.pos_triggers + self.neg_triggers
+    def final_pos_triggers(self) -> Tuple[str, ...]:
+        return self._adjust_triggers(self.pos_triggers)
+
+    @property
+    def final_neg_triggers(self) -> Tuple[str, ...]:
+        return self._adjust_triggers(self.neg_triggers)
+
+    @property
+    def final_triggers(self) -> Tuple[str, ...]:
+        return self.final_pos_triggers + self.final_neg_triggers
+
+    @property
+    def final_trigger_help(self):
+        return (
+            f"{', '.join(self.final_pos_triggers)} / "
+            f"{', '.join(self.final_neg_triggers)}"
+        )
 
     def process(self, args: List[str]) -> List[str]:
         """Process the arguments."""
@@ -58,9 +82,9 @@ class BoolOption:
             raise TooFewArgsError("Expected at least one argument, got none.")
 
         # check that the argument given matches the triggers
-        if args[0] in self.pos_triggers:
+        if args[0] in self.final_pos_triggers:
             self.value = True
-        elif args[0] in self.neg_triggers:
+        elif args[0] in self.final_neg_triggers:
             self.value = False
         else:
             raise UnexpectedTriggerError(
@@ -71,7 +95,7 @@ class BoolOption:
 
 
 @mutable(slots=False)
-class KnownLenOpt:
+class KnownLenOpt(Option):
     """Base class for options of known length."""
 
     descr: str
@@ -87,6 +111,14 @@ class KnownLenOpt:
         # if multiple is true, it has to be a list
         if self.multiple:
             assert isinstance(self.value, list)
+
+    @property
+    def final_triggers(self) -> Tuple[str, ...]:
+        return self._adjust_triggers(self.triggers)
+
+    @property
+    def final_trigger_help(self):
+        return f"{', '.join(self.final_triggers)}"
 
     def process_args(self, args: List[str]) -> None:
         """Process the arguments and store in value."""
@@ -109,7 +141,7 @@ class KnownLenOpt:
         if len(args) == 0:
             raise TooFewArgsError("Expected at least one argument, got none.")
 
-        if args[0] not in self.triggers:
+        if args[0] not in self.final_triggers:
             raise UnexpectedTriggerError(
                 f"Option {args[0]} not registered as a trigger."
             )
@@ -188,6 +220,5 @@ class KnownLenArgs:
             raise TooFewArgsError(
                 f"Expected {self.nargs} arguments but got {len(args)}"
             )
-
         self.process_args(args[: self.nargs])
         return args[self.nargs :]

@@ -27,24 +27,40 @@ def test_protocol_checks_option_correct():
 
 class TestBoolOption:
     @pytest.mark.parametrize(
-        "pos_triggers,neg_triggers,args,val_exp,ret_args_exp",
+        "pos_triggers,neg_triggers,prefix,args,val_exp,ret_args_exp",
         [
-            (("-y", "--yes"), ("-n", "--no"), ["-y"], True, []),
-            (("-y", "--yes"), ("-n", "--no"), ["--yes"], True, []),
-            (("-y", "--yes"), ("-n", "--no"), ["-n"], False, []),
-            (("-y", "--yes"), ("-n", "--no"), ["--no"], False, []),
-            (("-y", "--yes"), ("-n", "--no"), ["-y", "other"], True, ["other"]),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-y"], True, []),
+            (("-y", "--yes"), ("-n", "--no"), "", ["--yes"], True, []),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-n"], False, []),
+            (("-y", "--yes"), ("-n", "--no"), "", ["--no"], False, []),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-y", "other"], True, ["other"]),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-a"], ..., []),
+            (("-y", "--yes"), ("-n", "--no"), "group", ["-y"], ..., []),
+            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-yes"], True, []),
+            (("-y", "--yes"), ("-n", "--no"), "group", ["--yes"], ..., []),
+            (("-y", "--yes"), ("-n", "--no"), "group", ["-n"], ..., []),
+            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-no"], False, []),
         ],
     )
-    def test_normal(self, pos_triggers, neg_triggers, args, val_exp, ret_args_exp):
+    def test_normal(
+        self, pos_triggers, neg_triggers, prefix, args, val_exp, ret_args_exp
+    ):
         """Test that BoolOption works as expected."""
 
         opt = BoolOption(
-            descr="test", pos_triggers=pos_triggers, neg_triggers=neg_triggers
+            descr="test",
+            pos_triggers=pos_triggers,
+            neg_triggers=neg_triggers,
+            prefix=prefix,
         )
-        ret_args = opt.process(args)
-        assert opt.value == val_exp
-        assert ret_args == ret_args_exp
+        if val_exp == ...:
+            # raises an error
+            with pytest.raises(UnexpectedTriggerError):
+                opt.process(args)
+        else:
+            ret_args = opt.process(args)
+            assert opt.value == val_exp
+            assert ret_args == ret_args_exp
 
     def test_unused(self):
         opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
@@ -54,11 +70,6 @@ class TestBoolOption:
         opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
         with pytest.raises(TooFewArgsError):
             opt.process([])
-
-    def test_unexpected_trigger_error(self):
-        opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
-        with pytest.raises(UnexpectedTriggerError):
-            opt.process(["-b"])
 
     def test_multiple_process(self):
         opt = BoolOption(descr="test", pos_triggers=("--yes",), neg_triggers=("--no",))
@@ -86,7 +97,57 @@ class TestNoOpOption:
 
 
 class TestKnownLenOpt:
-    def path_opt(self, multiple: bool) -> KnownLenOpt:
+    @pytest.mark.parametrize(
+        "triggers,prefix,args,val_exp,ret_args_exp",
+        [
+            (("--path", "-p"), "", ["--path", "/a/b"], Path("/a/b"), []),
+            (("--path", "-p"), "", ["-p", "/a/b"], Path("/a/b"), []),
+            (
+                ("--path", "-p"),
+                "",
+                ["--path", "/a/b", "other"],
+                Path("/a/b"),
+                ["other"],
+            ),
+            (("--path", "-p"), "", ["-a", "/a/b"], ..., []),
+            (("--path", "-p"), "", ["--foo", "/a/b"], ..., []),
+            (("--path", "-p"), "group", ["--group-path", "/a/b"], Path("/a/b"), []),
+            (("--path", "-p"), "group", ["--path", "/a/b"], ..., []),
+            (("--path", "-p"), "group", ["-p", "/a/b"], ..., []),
+            (
+                ("--path", "-p"),
+                "group",
+                ["--group-path", "/a/b", "other"],
+                Path("/a/b"),
+                ["other"],
+            ),
+            (("--path", "-p"), "group", ["-a", "/a/b"], ..., []),
+            (("--path", "-p"), "group", ["--foo", "/a/b"], ..., []),
+        ],
+    )
+    def test_normal(self, triggers, prefix, args, val_exp, ret_args_exp):
+        """Test that BoolOption works as expected."""
+
+        opt = KnownLenOpt(
+            descr="Path option",
+            triggers=triggers,
+            value=...,
+            nargs=1,
+            type_converter=Path,
+            callback=None,
+            multiple=False,
+            prefix=prefix,
+        )
+        if val_exp == ...:
+            # raises an error
+            with pytest.raises(UnexpectedTriggerError):
+                opt.process(args)
+        else:
+            ret_args = opt.process(args)
+            assert opt.value == val_exp
+            assert ret_args == ret_args_exp
+
+    def test_too_few_args(self):
         opt = KnownLenOpt(
             descr="Path option",
             triggers=("--path", "-p"),
@@ -94,17 +155,21 @@ class TestKnownLenOpt:
             nargs=1,
             type_converter=Path,
             callback=None,
-            multiple=multiple,
+            multiple=True,
         )
-        return opt
-
-    def test_path_opt(self):
-        opt = self.path_opt(multiple=False)
-        opt.process(["--path", "/a/b"])
-        assert opt.value == Path("/a/b")
+        with pytest.raises(TooFewArgsError):
+            opt.process(["--path"])
 
     def test_path_opt_multi(self):
-        opt = self.path_opt(multiple=True)
+        opt = KnownLenOpt(
+            descr="Path option",
+            triggers=("--path", "-p"),
+            value=...,
+            nargs=1,
+            type_converter=Path,
+            callback=None,
+            multiple=True,
+        )
         opt.process(["--path", "/a/b"])
         opt.process(["--path", "/c"])
         assert opt.value == [Path("/a/b"), Path("/c")]
