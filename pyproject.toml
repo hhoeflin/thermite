@@ -1,0 +1,47 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "thermite"
+authors = [{name = "Holger Hoefling", email = "hhoeflin@gmail.com"}]
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: MIT License"]
+dynamic = ["version", "description"]
+
+dependencies = [
+    "rich",
+    "more_itertools",
+    "attrs",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pudb >=2021.2.2",
+    "pytest >=6.2.5",
+    "pytest-pudb >=0.7.0",
+    "mypy",
+    "black",
+    "Flake8-pyproject",
+    "pydocstyle",
+]
+
+[tool.pyright]
+include=['thermite']
+typeCheckingMode='off'
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.flake8]
+max_line_length = 88
+ignore = "D203"
+
+[tool.pydocstyle]
+add_ignore = ["D105"]
+ignore_decorators = ["overrides"]
