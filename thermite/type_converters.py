@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import (
@@ -15,7 +14,7 @@ from typing import (
     get_origin,
 )
 
-from .exceptions import IncorrectNumberArgs
+from attrs import field, mutable
 
 
 class TypeConverterMulti(Protocol):
@@ -29,7 +28,7 @@ class TypeConverterMulti(Protocol):
 TypeConverter = Union[Callable[[str], Any], TypeConverterMulti]
 
 
-@dataclass
+@mutable(slots=False)
 class TypeConverterNargs:
     converter: TypeConverter
     nargs: int
@@ -172,12 +171,14 @@ class SimpleTypeConverterFactory:
         return TypeConverterNargs(converter, 1)
 
 
+@mutable(slots=False)
 class ComplexTypeConverterFactory:
-    _simple_factory: SimpleTypeConverterFactory
-    _complex_factories: List[TypeConverterFactory]
+    _simple_factory: SimpleTypeConverterFactory = field(
+        factory=SimpleTypeConverterFactory
+    )
+    _complex_factories: List[TypeConverterFactory] = field(init=False)
 
-    def __init__(self, simple_factory: SimpleTypeConverterFactory):
-        self._simple_factory = simple_factory
+    def __attrs_post_init__(self):
         self._complex_factories = [
             self.list_converter_factory,
             self.tuple_converter_factory,

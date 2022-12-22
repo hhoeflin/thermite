@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type
 
 import pytest
 
-from thermite.exceptions import TooManyArguments, UnexpectedTriggerError
+from thermite.exceptions import TooManyInputsError, UnexpectedTriggerError
 from thermite.parameters import ParameterGroup
 from thermite.preprocessing import split_and_expand
 from thermite.process_objects import process_function
@@ -64,7 +64,7 @@ class TestProcessFunctions:
             (
                 example_func_kw_or_pos,
                 ("1", "test"),
-                TooManyArguments,
+                TooManyInputsError,
                 (),
                 {},
             ),

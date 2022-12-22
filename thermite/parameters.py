@@ -6,8 +6,8 @@ from attrs import field, mutable
 
 from .exceptions import (
     DuplicatedTriggerError,
-    TooFewArgsError,
-    TooManyArguments,
+    TooFewInputsError,
+    TooManyInputsError,
     UnexpectedTriggerError,
 )
 from .type_converters import TypeConverter
@@ -85,7 +85,7 @@ class BoolOption(Option):
         """Process the arguments."""
         # check that we have at least one argument
         if len(args) == 0:
-            raise TooFewArgsError("Expected at least one argument, got none.")
+            raise TooFewInputsError("Expected at least one input argument, got none.")
 
         # check that the argument given matches the triggers
         if args[0] in self.final_pos_triggers:
@@ -113,7 +113,7 @@ class KnownLenOpt(Option):
     callback: Optional[Callable[[Any], Any]] = field(default=None)
     times_called: int = field(default=0, init=False)
 
-    def __post_init__(self):
+    def __attrs_post_init__(self):
         # if multiple is true, it has to be a list
         if self.multiple:
             assert isinstance(self.value, list)
@@ -145,7 +145,7 @@ class KnownLenOpt(Option):
     def process(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""
         if len(args) == 0:
-            raise TooFewArgsError("Expected at least one argument, got none.")
+            raise TooFewInputsError("Expected at least one argument, got none.")
 
         if args[0] not in self.final_triggers:
             raise UnexpectedTriggerError(
@@ -158,7 +158,7 @@ class KnownLenOpt(Option):
             return []
 
         if len(args) - 1 < self.nargs:
-            raise TooFewArgsError(
+            raise TooFewInputsError(
                 f"Expected {self.nargs} arguments but got {len(args) - 1}"
             )
 
@@ -215,7 +215,7 @@ class KnownLenArg(Argument):
     def process(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""
         if len(args) == 0:
-            raise TooFewArgsError("Expected at least one argument, got none.")
+            raise TooFewInputsError("Expected at least one argument, got none.")
 
         if self.nargs == -1:
             # take all arguments
@@ -223,7 +223,7 @@ class KnownLenArg(Argument):
             return []
 
         if len(args) < self.nargs:
-            raise TooFewArgsError(
+            raise TooFewInputsError(
                 f"Expected {self.nargs} arguments but got {len(args)}"
             )
         self._process_args(args[: self.nargs])
@@ -290,7 +290,7 @@ class OptionGroup:
             self._stored_trigger_mapping = self.mapping_final_trigger_to_opt()
 
         if len(args) == 0:
-            raise TooFewArgsError("Processing options requires more than 0 args.")
+            raise TooFewInputsError("Processing options requires more than 0 args.")
 
         if not args[0].startswith("-"):
             raise Exception("First argument has to start with a '-': {args[0]}")
@@ -324,7 +324,7 @@ class ArgumentGroup:
 
     def process(self, args: Sequence[str]) -> List[str]:
         if len(args) == 0:
-            raise TooFewArgsError("Processing options requires more than 0 args.")
+            raise TooFewInputsError("Processing options requires more than 0 args.")
 
         if args[0].startswith("-"):
             raise Exception("First argument can't be a trigger: {args[0]}")
@@ -334,7 +334,7 @@ class ArgumentGroup:
             if argument.times_called == 0:
                 return argument.process(args)
 
-        raise TooManyArguments(f"No remaining argument for {args}")
+        raise TooManyInputsError(f"No remaining unspecified argument for {args}")
 
     @property
     def args(self) -> Tuple[Any, ...]:

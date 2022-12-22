@@ -4,7 +4,11 @@ from typing import Tuple
 import pytest
 from attrs import mutable
 
-from thermite.exceptions import TooFewArgsError, UnexpectedTriggerError
+from thermite.exceptions import (
+    TooFewInputsError,
+    TooManyInputsError,
+    UnexpectedTriggerError,
+)
 from thermite.parameters import (
     BoolOption,
     KnownLenArg,
@@ -68,7 +72,7 @@ class TestBoolOption:
 
     def test_too_few_args(self):
         opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
-        with pytest.raises(TooFewArgsError):
+        with pytest.raises(TooFewInputsError):
             opt.process([])
 
     def test_multiple_process(self):
@@ -151,20 +155,20 @@ class TestKnownLenOpt:
         opt = KnownLenOpt(
             descr="Path option",
             triggers=("--path", "-p"),
-            value=...,
+            value=[],
             nargs=1,
             type_converter=Path,
             callback=None,
             multiple=True,
         )
-        with pytest.raises(TooFewArgsError):
+        with pytest.raises(TooFewInputsError):
             opt.process(["--path"])
 
     def test_path_opt_multi(self):
         opt = KnownLenOpt(
             descr="Path option",
             triggers=("--path", "-p"),
-            value=...,
+            value=[],
             nargs=1,
             type_converter=Path,
             callback=None,

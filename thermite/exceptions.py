@@ -2,10 +2,6 @@ class ThermiteException(Exception):
     pass
 
 
-class TooFewArgsError(Exception):
-    pass
-
-
 class UnexpectedTriggerError(Exception):
     pass
 
@@ -22,5 +18,13 @@ class DuplicatedTriggerError(Exception):
     pass
 
 
-class TooManyArguments(Exception):
+class TooManyInputsError(Exception):
+    pass
+
+
+class TooFewInputsError(Exception):
+    pass
+
+
+class UnspecifiedParameterError(Exception):
     pass
