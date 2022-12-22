@@ -7,7 +7,7 @@ from attrs import mutable
 from thermite.exceptions import TooFewArgsError, UnexpectedTriggerError
 from thermite.parameters import (
     BoolOption,
-    KnownLenArgs,
+    KnownLenArg,
     KnownLenOpt,
     NoOpOption,
     Option,
@@ -176,8 +176,8 @@ class TestKnownLenOpt:
 
 
 class TestKnownLenArgs:
-    def path_arg(self) -> KnownLenArgs:
-        arg = KnownLenArgs(
+    def path_arg(self) -> KnownLenArg:
+        arg = KnownLenArg(
             descr="Path option",
             value=...,
             nargs=1,

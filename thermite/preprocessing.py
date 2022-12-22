@@ -1,13 +1,16 @@
 "Basic processing of command line arguments"
+from collections import deque
 from itertools import chain
-from typing import List
+from typing import Deque, List, Sequence
 
 from more_itertools import split_before
 
 
 def expand_dash_arg(x: str) -> List[str]:
     """
-    Expand arguments with single dash and several chars into separate single dash options.
+    Expand arguments with single dash and several chars.
+
+    Separate several chars into separate single dash options.
     """
     if x.startswith("-") and not x.startswith("--"):
         return [f"-{char}" for char in x[1:]]
@@ -15,7 +18,7 @@ def expand_dash_arg(x: str) -> List[str]:
         return [x]
 
 
-def split_and_expand(args: List[str]) -> List[List[str]]:
+def split_and_expand(args: Sequence[str]) -> Deque[List[str]]:
     """
     Split command line arguments and expand single dash args.
 
@@ -31,7 +34,7 @@ def split_and_expand(args: List[str]) -> List[List[str]]:
         a set of arguments potentially related to an option.
 
     """
-    return list(
+    return deque(
         split_before(
             chain(*[expand_dash_arg(arg) for arg in args]),
             pred=lambda x: x.startswith("-"),

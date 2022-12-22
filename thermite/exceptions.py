@@ -16,3 +16,11 @@ class UnmatchedOriginError(Exception):
 
 class IncorrectNumberArgs(Exception):
     pass
+
+
+class DuplicatedTriggerError(Exception):
+    pass
+
+
+class TooManyArguments(Exception):
+    pass

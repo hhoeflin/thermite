@@ -2,13 +2,27 @@
 import inspect
 from typing import Callable, List, Sequence, Type, get_args, get_origin
 
-from .parameters import BoolOption, KnownLenArgs, KnownLenOpt, Parameter
+from .parameters import BoolOption, KnownLenArg, KnownLenOpt, Parameter, ParameterGroup
 from .type_converters import ComplexTypeConverterFactory
 from .utils import clify_argname
 
 
-def process_function(func: Callable):
-    pass
+def process_function(
+    func: Callable,
+    complex_factory: ComplexTypeConverterFactory,
+) -> ParameterGroup:
+    func_sig = inspect.signature(func)
+
+    param_group = ParameterGroup(descr="")
+    for param in func_sig.parameters.values():
+        param_group.add_param(
+            name=param.name,
+            param=process_parameter(
+                param=param, description="", complex_factory=complex_factory
+            ),
+        )
+
+    return param_group
 
 
 def process_parameter(
@@ -38,7 +52,7 @@ def process_parameter(
     if param.kind == inspect.Parameter.POSITIONAL_ONLY:
         conv_nargs = complex_factory.converter_factory(annot_to_use)
         # single argument
-        return KnownLenArgs(
+        return KnownLenArg(
             descr=description,
             nargs=conv_nargs.nargs,
             value=default_val,
@@ -51,7 +65,7 @@ def process_parameter(
         # not for the whole list
         annot_to_use = List[annot_to_use]  # type: ignore
         conv_nargs = complex_factory.converter_factory(annot_to_use)
-        return KnownLenArgs(
+        return KnownLenArg(
             descr=description,
             nargs=conv_nargs.nargs,
             value=default_val,
@@ -68,8 +82,8 @@ def process_parameter(
             return BoolOption(
                 value=default_val,
                 descr=description,
-                pos_triggers=[f"--{clify_argname(param.name)}"],
-                neg_triggers=[f"--no-{clify_argname(param.name)}"],
+                pos_triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
+                neg_triggers=[f"--no-{clify_argname(param.name)}"],  # type: ignore
             )
         elif get_origin(annot_to_use) in (List, Sequence):
             annot_args = get_args(annot_to_use)
@@ -86,7 +100,7 @@ def process_parameter(
                 value=default_val,
                 nargs=conv_nargs.nargs,
                 type_converter=conv_nargs.converter,
-                triggers=[f"--{clify_argname(param.name)}"],
+                triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                 multiple=True,
             )
         else:
@@ -96,7 +110,7 @@ def process_parameter(
                 value=default_val,
                 nargs=conv_nargs.nargs,
                 type_converter=conv_nargs.converter,
-                triggers=[f"--{clify_argname(param.name)}"],
+                triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                 multiple=False,
             )
 
