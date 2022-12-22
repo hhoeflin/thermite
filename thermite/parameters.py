@@ -6,9 +6,11 @@ from attrs import field, mutable
 
 from .exceptions import (
     DuplicatedTriggerError,
+    NothingProcessedError,
     TooFewInputsError,
-    TooManyInputsError,
     UnexpectedTriggerError,
+    UnspecifiedArgumentError,
+    UnspecifiedOptionError,
 )
 from .type_converters import TypeConverter
 
@@ -309,6 +311,11 @@ class OptionGroup:
 
     @property
     def kwargs(self) -> Dict[str, Any]:
+        for opt_name, opt in self._opts.items():
+            if opt.value == ...:
+                raise UnspecifiedOptionError(
+                    f"Argument {opt_name} was not specified and has no default"
+                )
         return {key: opt.value for key, opt in self._opts.items()}
 
 
@@ -334,10 +341,15 @@ class ArgumentGroup:
             if argument.times_called == 0:
                 return argument.process(args)
 
-        raise TooManyInputsError(f"No remaining unspecified argument for {args}")
+        raise NothingProcessedError(f"No arguments were processed for {args}")
 
     @property
     def args(self) -> Tuple[Any, ...]:
+        for arg_name, arg in self._args.items():
+            if arg.value == ...:
+                raise UnspecifiedArgumentError(
+                    f"Argument {arg_name} was not specified and has no default"
+                )
         return tuple((arg.value for arg in self._args.values()))
 
 

@@ -2,7 +2,12 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type
 
 import pytest
 
-from thermite.exceptions import TooManyInputsError, UnexpectedTriggerError
+from thermite.exceptions import (
+    NothingProcessedError,
+    UnexpectedTriggerError,
+    UnspecifiedArgumentError,
+    UnspecifiedOptionError,
+)
 from thermite.parameters import ParameterGroup
 from thermite.preprocessing import split_and_expand
 from thermite.process_objects import process_function
@@ -64,7 +69,14 @@ class TestProcessFunctions:
             (
                 example_func_kw_or_pos,
                 ("1", "test"),
-                TooManyInputsError,
+                NothingProcessedError,
+                (),
+                {},
+            ),
+            (
+                example_func_kw_or_pos,
+                ("--b", "test"),
+                UnspecifiedOptionError,
                 (),
                 {},
             ),
@@ -79,6 +91,13 @@ class TestProcessFunctions:
                 example_func_pos_only,
                 ("--a", "1", "--b", "test"),
                 UnexpectedTriggerError,
+                (),
+                {},
+            ),
+            (
+                example_func_pos_only,
+                (),
+                UnspecifiedArgumentError,
                 (),
                 {},
             ),
@@ -97,6 +116,8 @@ class TestProcessFunctions:
         if process_exc is not None:
             with pytest.raises(process_exc):
                 process_multiple(input_args, param_group=param_group)
+                assert param_group.args == output_args
+                assert param_group.kwargs == output_kwargs
         else:
             process_multiple(input_args, param_group=param_group)
             assert param_group.args == output_args

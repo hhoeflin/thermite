@@ -4,11 +4,7 @@ from typing import Tuple
 import pytest
 from attrs import mutable
 
-from thermite.exceptions import (
-    TooFewInputsError,
-    TooManyInputsError,
-    UnexpectedTriggerError,
-)
+from thermite.exceptions import TooFewInputsError, UnexpectedTriggerError
 from thermite.parameters import (
     BoolOption,
     KnownLenArg,

@@ -18,7 +18,7 @@ class DuplicatedTriggerError(Exception):
     pass
 
 
-class TooManyInputsError(Exception):
+class NothingProcessedError(Exception):
     pass
 
 
@@ -27,4 +27,19 @@ class TooFewInputsError(Exception):
 
 
 class UnspecifiedParameterError(Exception):
+    pass
+
+
+class UnspecifiedOptionError(UnspecifiedParameterError):
+    pass
+
+
+class UnspecifiedArgumentError(UnspecifiedParameterError):
+    pass
+
+
+class UnprocessedArgumentError(Exception):
+    pass
+
+class UnexpectedReturnTypeError(Exception):
     pass
