@@ -2,6 +2,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type
 
 import pytest
 
+from thermite.command import Command
 from thermite.exceptions import (
     NothingProcessedError,
     UnexpectedTriggerError,
@@ -10,7 +11,6 @@ from thermite.exceptions import (
 )
 from thermite.parameters import ParameterGroup
 from thermite.preprocessing import split_and_expand
-from thermite.process_objects import process_function
 from thermite.type_converters import (
     ComplexTypeConverterFactory,
     SimpleTypeConverterFactory,
@@ -53,9 +53,7 @@ def process_multiple(input_args_multiple: Sequence[str], param_group: ParameterG
             input_args_deque.appendleft(args_return)
 
 
-class TestProcessFunctions:
-    complex_factory = ComplexTypeConverterFactory(SimpleTypeConverterFactory())
-
+class TestCommandFromFunction:
     @pytest.mark.parametrize(
         "func,input_args,process_exc,output_args,output_kwargs",
         [
@@ -111,7 +109,8 @@ class TestProcessFunctions:
         output_args: Optional[Tuple[Any]],
         output_kwargs: Optional[Dict[str, Any]],
     ):
-        param_group = process_function(func, self.complex_factory)
+        command = Command.from_function(func=func)
+        param_group = command.param_group
 
         if process_exc is not None:
             with pytest.raises(process_exc):
