@@ -1,18 +1,18 @@
 import inspect
+from inspect import Signature
 from typing import (
     Any,
     Callable,
     ClassVar,
     Dict,
     List,
-    Optional,
     Sequence,
     Type,
     get_args,
     get_origin,
 )
 
-from attrs import field, mutable
+from attrs import mutable
 
 from .exceptions import (
     NothingProcessedError,
@@ -25,19 +25,26 @@ from .type_converters import ComplexTypeConverterFactory
 from .utils import clify_argname
 
 
+def extract_subcommands(return_type: Any) -> Dict[str, Any]:
+    if return_type == Signature.empty:
+        return {}
+    else:
+        return {}
+
+
 @mutable(slots=False)
 class Command:
     obj: Any
     param_group: ParameterGroup
-    subcommand_objs: Dict[Optional[str], Any]
     expected_ret_type: object
+    subcommand_objs: Dict[str, Any]
 
     _complex_factory: ClassVar[
         ComplexTypeConverterFactory
     ] = ComplexTypeConverterFactory()
 
     @classmethod
-    def from_function(cls, func: Callable):
+    def _from_function(cls, func: Callable):
         func_sig = inspect.signature(func)
 
         param_group = ParameterGroup(descr="")
@@ -52,13 +59,28 @@ class Command:
         return cls(
             obj=func,
             param_group=param_group,
-            subcommand_objs={},
             expected_ret_type=func_sig.return_annotation,
+            subcommand_objs={},
         )
 
     @classmethod
     def from_obj(cls, obj: Any):
-        pass
+        if inspect.isfunction(obj):
+            return cls._from_function(func=obj)
+        else:
+            raise NotImplementedError()
+
+    def _exec_command(self) -> Any:
+        if inspect.isfunction(self.obj):
+            res_obj = self.obj(*self.param_group.args, **self.param_group.kwargs)
+            if not isinstance(res_obj, self.expected_ret_type):  # type: ignore
+                raise UnexpectedReturnTypeError(
+                    f"Expected return type {str(self.expected_ret_type)} "
+                    f"but got {str(type(res_obj))}"
+                )
+            return res_obj
+        else:
+            raise NotImplementedError()
 
     def process_multiple(self, args: Sequence[str]) -> Any:
         input_args_deque = split_and_expand(args)
@@ -76,17 +98,9 @@ class Command:
                     remaining_input_args = list(input_args_deque)
                     input_args_deque.clear()
 
-                    res_obj = self.obj(
-                        *self.param_group.args, **self.param_group.kwargs
-                    )
+                    res_obj = self._exec_command()
 
-                    if not isinstance(res_obj, self.expected_ret_type):  # type: ignore
-                        raise UnexpectedReturnTypeError(
-                            f"Expected return type {str(self.expected_ret_type)} "
-                            f"but got {str(type(res_obj))}"
-                        )
-
-                    subcommand = self.from_obj(self.subcommand_objs[input_args[0]])
+                    subcommand = self.from_obj(getattr(res_obj, input_args[0]))
                     return subcommand.process_multiple(remaining_input_args)
                 else:
                     raise UnprocessedArgumentError(
