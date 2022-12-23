@@ -13,6 +13,7 @@ from typing import (
 )
 
 from attrs import mutable
+from beartype.door import is_bearable
 
 from .exceptions import (
     NothingProcessedError,
@@ -64,23 +65,55 @@ class Command:
         )
 
     @classmethod
+    def _from_class(cls, klass: Type):
+        init_sig = inspect.signature(klass.__init__)
+
+        # the signature has self at the beginning that we need to ignore
+        param_group = ParameterGroup(descr="")
+        for count, param in enumerate(init_sig.parameters.values()):
+            if count == 0:
+                # this is self
+                continue
+            else:
+                param_group.add_param(
+                    name=param.name,
+                    param=process_parameter(
+                        param=param,
+                        description="",
+                        complex_factory=cls._complex_factory,
+                    ),
+                )
+
+        return cls(
+            obj=klass,
+            param_group=param_group,
+            expected_ret_type=klass,
+            subcommand_objs={},
+        )
+
+    @classmethod
     def from_obj(cls, obj: Any):
         if inspect.isfunction(obj):
             return cls._from_function(func=obj)
+        elif inspect.isclass(obj):
+            return cls._from_class(obj)
         else:
             raise NotImplementedError()
 
     def _exec_command(self) -> Any:
         if inspect.isfunction(self.obj):
             res_obj = self.obj(*self.param_group.args, **self.param_group.kwargs)
-            if not isinstance(res_obj, self.expected_ret_type):  # type: ignore
+            if not is_bearable(res_obj, self.expected_ret_type):
                 raise UnexpectedReturnTypeError(
                     f"Expected return type {str(self.expected_ret_type)} "
                     f"but got {str(type(res_obj))}"
                 )
-            return res_obj
+        elif inspect.isclass(self.obj):
+            res_obj = self.obj(*self.param_group.args, **self.param_group.kwargs)
         else:
             raise NotImplementedError()
+
+        return res_obj
 
     def process_multiple(self, args: Sequence[str]) -> Any:
         input_args_deque = split_and_expand(args)
@@ -110,6 +143,8 @@ class Command:
                 raise Exception("Input args have same length as return args")
             if len(args_return) > 0:
                 input_args_deque.appendleft(args_return)
+
+        return self._exec_command()
 
 
 def process_parameter(
