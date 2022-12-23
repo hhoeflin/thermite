@@ -35,7 +35,7 @@ def example_func_pos_only(a: int, b: str = "1", /) -> Tuple[int, str]:
     return (a, b)
 
 
-class ExampleClass:
+class ExampleClassKwOnly:
     def __init__(self, a: int, b: str = "test"):
         self.a = a
         self.b = b
@@ -97,6 +97,13 @@ class TestCommandFromFunction:
                 UnspecifiedArgumentError,
                 (),
                 {},
+            ),
+            (
+                ExampleClassKwOnly,
+                ("--a", "1", "--b", "test"),
+                None,
+                (),
+                {"a": 1, "b": "test"},
             ),
         ],
     )
