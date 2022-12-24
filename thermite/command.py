@@ -121,7 +121,7 @@ class Command:
         while len(input_args_deque) > 0:
             input_args = input_args_deque.popleft()
             try:
-                args_return = self.param_group.process(input_args)
+                args_return = self.param_group.process_split(input_args)
             except NothingProcessedError:
                 # there are arguments left that the param_group can't handle
                 # search through the subcommand_objs
@@ -198,7 +198,6 @@ def process_parameter(
         inspect.Parameter.POSITIONAL_OR_KEYWORD,
         inspect.Parameter.KEYWORD_ONLY,
     ):
-        # option
         if annot_to_use == bool:
             # need to use a bool-option
             return BoolOption(
@@ -226,15 +225,22 @@ def process_parameter(
                 multiple=True,
             )
         else:
-            conv_nargs = complex_factory.converter_factory(annot_to_use)
-            return KnownLenOpt(
-                descr=description,
-                value=default_val,
-                nargs=conv_nargs.nargs,
-                type_converter=conv_nargs.converter,
-                triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
-                multiple=False,
-            )
+            try:
+                conv_nargs = complex_factory.converter_factory(annot_to_use)
+                return KnownLenOpt(
+                    descr=description,
+                    value=default_val,
+                    nargs=conv_nargs.nargs,
+                    type_converter=conv_nargs.converter,
+                    triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
+                    multiple=False,
+                )
+            except TypeError:
+                # see if this could be done using a class option group
+                if inspect.isclass(annot_to_use):
+                    # it is a class that we want to use
+                    raise NotImplementedError
+            raise NotImplementedError()
 
     elif param.kind == inspect.Parameter.VAR_KEYWORD:
         # not yet a solution; should allow to pass any option

@@ -18,22 +18,30 @@ EllipsisType = type(...)
 
 
 class Parameter(ABC):
-    """Protocol class for Parameters."""
+    """Base class for Parameters."""
 
     value: Any
     descr: str
 
     @abstractmethod
-    def process(self, args: Sequence[str]) -> List[str]:
+    def process_split(self, args: Sequence[str]) -> List[str]:
         """Get a list of arguments and returns any unused ones."""
         ...
 
 
 @mutable(slots=False, kw_only=True)
 class Option(Parameter):
-    """Protocol class for Options."""
+    """Base class for Options."""
 
-    prefix: str = ""
+    _prefix: str = ""
+
+    @property
+    def prefix(self) -> str:
+        return self._prefix
+
+    @prefix.setter
+    def prefix(self, prefix: str):
+        self._prefix = prefix
 
     @property
     @abstractmethod
@@ -83,7 +91,7 @@ class BoolOption(Option):
             f"{', '.join(self.final_neg_triggers)}"
         )
 
-    def process(self, args: Sequence[str]) -> List[str]:
+    def process_split(self, args: Sequence[str]) -> List[str]:
         """Process the arguments."""
         # check that we have at least one argument
         if len(args) == 0:
@@ -144,7 +152,7 @@ class KnownLenOpt(Option):
 
         self.times_called += 1
 
-    def process(self, args: Sequence[str]) -> List[str]:
+    def process_split(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""
         if len(args) == 0:
             raise TooFewInputsError("Expected at least one argument, got none.")
@@ -214,7 +222,7 @@ class KnownLenArg(Argument):
 
         self.times_called += 1
 
-    def process(self, args: Sequence[str]) -> List[str]:
+    def process_split(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""
         if len(args) == 0:
             raise TooFewInputsError("Expected at least one argument, got none.")
@@ -271,7 +279,7 @@ class OptionGroup:
         else:
             return self.name
 
-    def mapping_final_trigger_to_opt(self) -> Dict[str, Option]:
+    def _mapping_final_trigger_to_opt(self) -> Dict[str, Option]:
         res: Dict[str, Option] = {}
         for opt in self._opts.values():
             final_triggers = opt.final_triggers
@@ -285,11 +293,11 @@ class OptionGroup:
         return res
 
     def final_triggers(self) -> Set[str]:
-        return set(self.mapping_final_trigger_to_opt().keys())
+        return set(self._mapping_final_trigger_to_opt().keys())
 
-    def process(self, args: Sequence[str]) -> List[str]:
+    def process_split(self, args: Sequence[str]) -> List[str]:
         if self._stored_trigger_mapping is None:
-            self._stored_trigger_mapping = self.mapping_final_trigger_to_opt()
+            self._stored_trigger_mapping = self._mapping_final_trigger_to_opt()
 
         if len(args) == 0:
             raise TooFewInputsError("Processing options requires more than 0 args.")
@@ -298,7 +306,7 @@ class OptionGroup:
             raise Exception("First argument has to start with a '-': {args[0]}")
 
         if args[0] in self._stored_trigger_mapping:
-            return self._stored_trigger_mapping[args[0]].process(args)
+            return self._stored_trigger_mapping[args[0]].process_split(args)
         else:
             raise UnexpectedTriggerError(f"Trigger {args[0]} not in mapping")
 
@@ -329,7 +337,7 @@ class ArgumentGroup:
             raise Exception(f"{name} already a stored argument.")
         self._args[name] = argument
 
-    def process(self, args: Sequence[str]) -> List[str]:
+    def process_split(self, args: Sequence[str]) -> List[str]:
         if len(args) == 0:
             raise TooFewInputsError("Processing options requires more than 0 args.")
 
@@ -339,7 +347,7 @@ class ArgumentGroup:
         # go through the stored arguments to the first unprocessed one
         for argument in self._args.values():
             if argument.times_called == 0:
-                return argument.process(args)
+                return argument.process_split(args)
 
         raise NothingProcessedError(f"No arguments were processed for {args}")
 
@@ -369,14 +377,14 @@ class ParameterGroup:
         else:
             raise TypeError(f"Unknown type {type(param)}")
 
-    def process(self, args: Sequence[str]) -> List[str]:
+    def process_split(self, args: Sequence[str]) -> List[str]:
         if len(args) == 0:
             return []
 
         if args[0].startswith("-"):
-            return self._opt_group.process(args)
+            return self._opt_group.process_split(args)
         else:
-            return self._arg_group.process(args)
+            return self._arg_group.process_split(args)
 
     @property
     def args(self) -> Tuple[Any, ...]:
@@ -385,3 +393,8 @@ class ParameterGroup:
     @property
     def kwargs(self) -> Dict[str, Any]:
         return self._opt_group.kwargs
+
+
+@mutable(slots=False)
+class ClassOption(Option, OptionGroup):
+    pass

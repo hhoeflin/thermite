@@ -56,9 +56,9 @@ class TestBoolOption:
         if val_exp == ...:
             # raises an error
             with pytest.raises(UnexpectedTriggerError):
-                opt.process(args)
+                opt.process_split(args)
         else:
-            ret_args = opt.process(args)
+            ret_args = opt.process_split(args)
             assert opt.value == val_exp
             assert ret_args == ret_args_exp
 
@@ -69,14 +69,14 @@ class TestBoolOption:
     def test_too_few_args(self):
         opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
         with pytest.raises(TooFewInputsError):
-            opt.process([])
+            opt.process_split([])
 
     def test_multiple_process(self):
         opt = BoolOption(descr="test", pos_triggers=("--yes",), neg_triggers=("--no",))
-        opt.process(["--yes"])
+        opt.process_split(["--yes"])
         assert opt.value is True
 
-        opt.process(["--no"])
+        opt.process_split(["--no"])
         assert opt.value is False
 
     def test_isinstance_option(self):
@@ -91,7 +91,7 @@ class TestBoolOption:
 class TestNoOpOption:
     def test_usage(self):
         opt = NoOpOption(descr="test", triggers=("-0",))
-        proc_ret = opt.process(["-0", "other"])
+        proc_ret = opt.process_split(["-0", "other"])
         assert proc_ret == ["other"]
         assert opt.value is None
 
@@ -141,9 +141,9 @@ class TestKnownLenOpt:
         if val_exp == ...:
             # raises an error
             with pytest.raises(UnexpectedTriggerError):
-                opt.process(args)
+                opt.process_split(args)
         else:
-            ret_args = opt.process(args)
+            ret_args = opt.process_split(args)
             assert opt.value == val_exp
             assert ret_args == ret_args_exp
 
@@ -158,7 +158,7 @@ class TestKnownLenOpt:
             multiple=True,
         )
         with pytest.raises(TooFewInputsError):
-            opt.process(["--path"])
+            opt.process_split(["--path"])
 
     def test_path_opt_multi(self):
         opt = KnownLenOpt(
@@ -170,8 +170,8 @@ class TestKnownLenOpt:
             callback=None,
             multiple=True,
         )
-        opt.process(["--path", "/a/b"])
-        opt.process(["--path", "/c"])
+        opt.process_split(["--path", "/a/b"])
+        opt.process_split(["--path", "/c"])
         assert opt.value == [Path("/a/b"), Path("/c")]
 
 
@@ -188,5 +188,5 @@ class TestKnownLenArgs:
 
     def test_path_arg(self):
         path_arg = self.path_arg()
-        path_arg.process(["/a/b"])
+        path_arg.process_split(["/a/b"])
         assert path_arg.value == Path("/a/b")
