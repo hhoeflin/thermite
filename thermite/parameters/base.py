@@ -1,18 +1,10 @@
 from abc import ABC, abstractmethod
-from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Callable, List, Optional, Sequence, Set, Union
 
 from attrs import field, mutable
 
-from .exceptions import (
-    DuplicatedTriggerError,
-    NothingProcessedError,
-    TooFewInputsError,
-    UnexpectedTriggerError,
-    UnspecifiedArgumentError,
-    UnspecifiedOptionError,
-)
-from .type_converters import TypeConverter
+from thermite.exceptions import TooFewInputsError, UnexpectedTriggerError
+from thermite.type_converters import TypeConverter
 
 EllipsisType = type(...)
 
@@ -20,12 +12,20 @@ EllipsisType = type(...)
 class Parameter(ABC):
     """Base class for Parameters."""
 
-    value: Any
+    _value: Any = field(default=...)
     descr: str
 
     @abstractmethod
     def process_split(self, args: Sequence[str]) -> List[str]:
         """Get a list of arguments and returns any unused ones."""
+        ...
+
+    @property
+    def value(self) -> Any:
+        return self._value
+
+    @property
+    def has_value(self) -> bool:
         ...
 
 
@@ -70,7 +70,7 @@ class BoolOption(Option):
     descr: str
     pos_triggers: Set[str] = field(converter=set)
     neg_triggers: Set[str] = field(converter=set)
-    value: Union[bool, EllipsisType] = field(default=...)  # type: ignore
+    _value: Union[bool, EllipsisType] = field(default=...)  # type: ignore
 
     @property
     def final_pos_triggers(self) -> Set[str]:
@@ -99,9 +99,9 @@ class BoolOption(Option):
 
         # check that the argument given matches the triggers
         if args[0] in self.final_pos_triggers:
-            self.value = True
+            self._value = True
         elif args[0] in self.final_neg_triggers:
-            self.value = False
+            self._value = False
         else:
             raise UnexpectedTriggerError(
                 f"Option {args[0]} not registered as a trigger."
@@ -117,7 +117,7 @@ class KnownLenOpt(Option):
     descr: str
     triggers: Set[str] = field(converter=set)
     nargs: int
-    value: Any
+    _value: Any
     type_converter: TypeConverter
     multiple: bool
     callback: Optional[Callable[[Any], Any]] = field(default=None)
@@ -144,11 +144,11 @@ class KnownLenOpt(Option):
 
         if self.multiple:
             if self.times_called == 0:
-                self.value = [args_value]
+                self._value = [args_value]
             else:
-                self.value.append(args_value)
+                self._value.append(args_value)
         else:
-            self.value = args_value
+            self._value = args_value
 
         self.times_called += 1
 
@@ -208,7 +208,7 @@ class KnownLenArg(Argument):
 
     descr: str
     nargs: int
-    value: Any
+    _value: Any
     type_converter: TypeConverter
     callback: Optional[Callable[[Any], Any]] = field(default=None)
 
@@ -218,7 +218,7 @@ class KnownLenArg(Argument):
         if self.callback is not None:
             args_value = self.callback(args_value)
 
-        self.value = args_value
+        self._value = args_value
 
         self.times_called += 1
 
@@ -238,163 +238,3 @@ class KnownLenArg(Argument):
             )
         self._process_args(args[: self.nargs])
         return list(args[self.nargs :])
-
-
-@mutable(slots=False)
-class OptionGroup:
-    descr: str
-    _prefix: str
-    _name: str
-    _opts: Dict[str, Option] = field(factory=dict, init=False)
-    _stored_trigger_mapping: Optional[Dict[str, Option]] = field(
-        default=None, init=False
-    )
-
-    def _set_prefix_children(self):
-        for option in self._options.values():
-            option.prefix = self.child_prefix
-
-    @property
-    def prefix(self) -> str:
-        return self._prefix
-
-    @prefix.setter
-    def prefix(self, prefix: str):
-        self._prefix = prefix
-        self._set_prefix_children()
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @name.setter
-    def name(self, name: str):
-        self._name = name
-        self._set_prefix_children()
-
-    @property
-    def child_prefix(self) -> str:
-        if self.prefix != "":
-            return f"{self.prefix}-{self.name}"
-        else:
-            return self.name
-
-    def _mapping_final_trigger_to_opt(self) -> Dict[str, Option]:
-        res: Dict[str, Option] = {}
-        for opt in self._opts.values():
-            final_triggers = opt.final_triggers
-            for trigger in final_triggers:
-                if trigger in res:
-                    raise DuplicatedTriggerError(
-                        f"Trigger {trigger} in options {opt} and {res[trigger]}"
-                    )
-                else:
-                    res[trigger] = opt
-        return res
-
-    def final_triggers(self) -> Set[str]:
-        return set(self._mapping_final_trigger_to_opt().keys())
-
-    def process_split(self, args: Sequence[str]) -> List[str]:
-        if self._stored_trigger_mapping is None:
-            self._stored_trigger_mapping = self._mapping_final_trigger_to_opt()
-
-        if len(args) == 0:
-            raise TooFewInputsError("Processing options requires more than 0 args.")
-
-        if not args[0].startswith("-"):
-            raise Exception("First argument has to start with a '-': {args[0]}")
-
-        if args[0] in self._stored_trigger_mapping:
-            return self._stored_trigger_mapping[args[0]].process_split(args)
-        else:
-            raise UnexpectedTriggerError(f"Trigger {args[0]} not in mapping")
-
-    def add_opt(self, name: str, option: Option):
-        # ensure that the new option has the right prefix
-        if name in self._opts:
-            raise Exception(f"{name} already a stored option.")
-        option.prefix = self.child_prefix
-        self._opts[name] = option
-
-    @property
-    def kwargs(self) -> Dict[str, Any]:
-        for opt_name, opt in self._opts.items():
-            if opt.value == ...:
-                raise UnspecifiedOptionError(
-                    f"Argument {opt_name} was not specified and has no default"
-                )
-        return {key: opt.value for key, opt in self._opts.items()}
-
-
-@mutable(slots=False)
-class ArgumentGroup:
-    _args: Dict[str, Argument] = field(factory=dict, init=False)
-
-    def add_arg(self, name: str, argument: Argument):
-        # ensure that the new option has the right prefix
-        if name in self._args:
-            raise Exception(f"{name} already a stored argument.")
-        self._args[name] = argument
-
-    def process_split(self, args: Sequence[str]) -> List[str]:
-        if len(args) == 0:
-            raise TooFewInputsError("Processing options requires more than 0 args.")
-
-        if args[0].startswith("-"):
-            raise Exception("First argument can't be a trigger: {args[0]}")
-
-        # go through the stored arguments to the first unprocessed one
-        for argument in self._args.values():
-            if argument.times_called == 0:
-                return argument.process_split(args)
-
-        raise NothingProcessedError(f"No arguments were processed for {args}")
-
-    @property
-    def args(self) -> Tuple[Any, ...]:
-        for arg_name, arg in self._args.items():
-            if arg.value == ...:
-                raise UnspecifiedArgumentError(
-                    f"Argument {arg_name} was not specified and has no default"
-                )
-        return tuple((arg.value for arg in self._args.values()))
-
-
-@mutable(slots=False)
-class ParameterGroup:
-    descr: str
-    _arg_group: ArgumentGroup = field(factory=ArgumentGroup, init=False)
-    _opt_group: OptionGroup = field(
-        factory=partial(OptionGroup, descr="", prefix="", name=""), init=False
-    )
-
-    def add_param(self, name: str, param: Parameter):
-        if isinstance(param, Argument):
-            self._arg_group.add_arg(name, param)
-        elif isinstance(param, Option):
-            self._opt_group.add_opt(name, param)
-        else:
-            raise TypeError(f"Unknown type {type(param)}")
-
-    def process_split(self, args: Sequence[str]) -> List[str]:
-        if len(args) == 0:
-            return []
-
-        if args[0].startswith("-"):
-            return self._opt_group.process_split(args)
-        else:
-            return self._arg_group.process_split(args)
-
-    @property
-    def args(self) -> Tuple[Any, ...]:
-        return self._arg_group.args
-
-    @property
-    def kwargs(self) -> Dict[str, Any]:
-        return self._opt_group.kwargs
-
-
-@mutable(slots=False)
-class ClassOption(Option, OptionGroup):
-    pass
