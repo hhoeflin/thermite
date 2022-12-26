@@ -7,6 +7,7 @@ from .base import (
     Option,
     Parameter,
 )
+from .create import process_parameter
 from .group import ArgumentGroup, OptionGroup, ParameterGroup
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "ArgumentGroup",
     "OptionGroup",
     "ParameterGroup",
+    "process_parameter",
 ]

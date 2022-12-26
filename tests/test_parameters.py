@@ -4,7 +4,11 @@ from typing import Tuple
 import pytest
 from attrs import mutable
 
-from thermite.exceptions import TooFewInputsError, UnexpectedTriggerError
+from thermite.exceptions import (
+    TooFewInputsError,
+    UnexpectedTriggerError,
+    UnspecifiedOptionError,
+)
 from thermite.parameters import (
     BoolOption,
     KnownLenArg,
@@ -64,7 +68,8 @@ class TestBoolOption:
 
     def test_unused(self):
         opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
-        assert opt.value is ...
+        with pytest.raises(UnspecifiedOptionError):
+            opt.value
 
     def test_too_few_args(self):
         opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
@@ -185,7 +190,6 @@ class TestKnownLenArgs:
             callback=None,
         )
         return arg
-
     def test_path_arg(self):
         path_arg = self.path_arg()
         path_arg.process_split(["/a/b"])

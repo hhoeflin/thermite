@@ -3,17 +3,26 @@ from typing import Any, Callable, List, Optional, Sequence, Set, Union
 
 from attrs import field, mutable
 
-from thermite.exceptions import TooFewInputsError, UnexpectedTriggerError
+from thermite.exceptions import (
+    TooFewInputsError,
+    UnexpectedTriggerError,
+    UnspecifiedArgumentError,
+    UnspecifiedOptionError,
+    UnspecifiedParameterError,
+)
 from thermite.type_converters import TypeConverter
 
 EllipsisType = type(...)
 
 
+@mutable(slots=False, kw_only=True)
 class Parameter(ABC):
     """Base class for Parameters."""
 
+    descr: str = field(default="")
+    name: str = field(default="")
+    _num_splits_processed: int = field(default=0, init=False)
     _value: Any = field(default=...)
-    descr: str
 
     @abstractmethod
     def process_split(self, args: Sequence[str]) -> List[str]:
@@ -21,12 +30,13 @@ class Parameter(ABC):
         ...
 
     @property
+    @abstractmethod
     def value(self) -> Any:
-        return self._value
+        ...
 
     @property
-    def has_value(self) -> bool:
-        ...
+    def unset(self) -> bool:
+        return self._num_splits_processed == 0
 
 
 @mutable(slots=False, kw_only=True)
@@ -53,6 +63,14 @@ class Option(Parameter):
     def final_trigger_help(self) -> str:
         ...
 
+    @property
+    def value(self) -> Any:
+        if self._value == ...:
+            raise UnspecifiedOptionError(
+                f"Paramter {self.name} was not specified and has no default"
+            )
+        return self._value
+
     def _adjust_triggers(self, triggers: Set[str]) -> Set[str]:
         if self.prefix == "":
             return set(triggers)
@@ -63,11 +81,10 @@ class Option(Parameter):
             )
 
 
-@mutable(slots=False)
+@mutable(slots=False, kw_only=True)
 class BoolOption(Option):
     """Implementation of boolean options."""
 
-    descr: str
     pos_triggers: Set[str] = field(converter=set)
     neg_triggers: Set[str] = field(converter=set)
     _value: Union[bool, EllipsisType] = field(default=...)  # type: ignore
@@ -106,22 +123,20 @@ class BoolOption(Option):
             raise UnexpectedTriggerError(
                 f"Option {args[0]} not registered as a trigger."
             )
+        self._num_splits_processed += 1
 
         return list(args[1:])
 
 
-@mutable(slots=False)
+@mutable(slots=False, kw_only=True)
 class KnownLenOpt(Option):
     """Base class for options of known length."""
 
-    descr: str
     triggers: Set[str] = field(converter=set)
     nargs: int
-    _value: Any
     type_converter: TypeConverter
     multiple: bool
     callback: Optional[Callable[[Any], Any]] = field(default=None)
-    times_called: int = field(default=0, init=False)
 
     def __attrs_post_init__(self):
         # if multiple is true, it has to be a list
@@ -143,14 +158,14 @@ class KnownLenOpt(Option):
             args_value = self.callback(args_value)
 
         if self.multiple:
-            if self.times_called == 0:
+            if self._num_splits_processed == 0:
                 self._value = [args_value]
             else:
                 self._value.append(args_value)
         else:
             self._value = args_value
 
-        self.times_called += 1
+        self._num_splits_processed += 1
 
     def process_split(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""
@@ -200,15 +215,19 @@ class NoOpOption(KnownLenOpt):
 
 @mutable(slots=False, kw_only=True)
 class Argument(Parameter):
-    times_called: int = field(default=0, init=False)
+    @property
+    def value(self) -> Any:
+        if self._value == ...:
+            raise UnspecifiedArgumentError(
+                f"Paramter {self.name} was not specified and has no default"
+            )
+        return self._value
 
 
-@mutable(slots=False)
+@mutable(slots=False, kw_only=True)
 class KnownLenArg(Argument):
 
-    descr: str
     nargs: int
-    _value: Any
     type_converter: TypeConverter
     callback: Optional[Callable[[Any], Any]] = field(default=None)
 
@@ -220,7 +239,7 @@ class KnownLenArg(Argument):
 
         self._value = args_value
 
-        self.times_called += 1
+        self._num_splits_processed += 1
 
     def process_split(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""

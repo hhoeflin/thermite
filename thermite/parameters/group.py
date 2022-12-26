@@ -1,14 +1,19 @@
+import inspect
+from abc import abstractmethod
 from functools import partial
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from attrs import field, mutable
+from beartype.door import is_bearable
 
 from thermite.exceptions import (
     DuplicatedTriggerError,
     NothingProcessedError,
     TooFewInputsError,
+    UnexpectedReturnTypeError,
     UnexpectedTriggerError,
     UnspecifiedArgumentError,
+    UnspecifiedObjError,
     UnspecifiedOptionError,
 )
 
@@ -17,19 +22,50 @@ from .base import Argument, Option, Parameter
 EllipsisType = type(...)
 
 
+@mutable(slots=False, kw_only=True)
 class Group:
-    obj: Any
+    descr: str = ""
+    obj: Any = None
+    expected_ret_type: object = None
+
+    @property
+    @abstractmethod
+    def args(self) -> Tuple[Any, ...]:
+        ...
+
+    @property
+    @abstractmethod
+    def kwargs(self) -> Dict[str, Any]:
+        ...
+
+    def _exec_obj(self) -> Any:
+        if self.obj is None:
+            raise UnspecifiedObjError()
+        if inspect.isfunction(self.obj):
+            res_obj = self.obj(*self.args, **self.kwargs)
+            if not is_bearable(res_obj, self.expected_ret_type):
+                raise UnexpectedReturnTypeError(
+                    f"Expected return type {str(self.expected_ret_type)} "
+                    f"but got {str(type(res_obj))}"
+                )
+        elif inspect.isclass(self.obj):
+            res_obj = self.obj(*self.args, **self.kwargs)
+        else:
+            raise NotImplementedError()
+
+        return res_obj
 
 
 @mutable(slots=False, kw_only=True)
-class OptionGroup(Option, Group):
-    descr: str
-    _prefix: str
-    _name: str
-    _opts: Dict[str, Option] = field(factory=dict, init=False)
-    _stored_trigger_mapping: Optional[Dict[str, Option]] = field(
+class OptionGroup(Group):
+    _opts: Dict[str, Union[Option, "OptionGroup"]] = field(factory=dict, init=False)
+    _stored_trigger_mapping: Optional[Dict[str, Union[Option, "OptionGroup"]]] = field(
         default=None, init=False
     )
+    _prefix: str = ""
+    _name: str = ""
+    _num_splits_processed: int = field(default=0, init=False)
+    _default_value: Any = field(default=...)
 
     def _set_prefix_children(self):
         for option in self._options.values():
@@ -60,8 +96,8 @@ class OptionGroup(Option, Group):
         else:
             return self.name
 
-    def _mapping_final_trigger_to_opt(self) -> Dict[str, Option]:
-        res: Dict[str, Option] = {}
+    def _mapping_final_trigger_to_opt(self) -> Dict[str, Union[Option, "OptionGroup"]]:
+        res: Dict[str, Union[Option, "OptionGroup"]] = {}
         for opt in self._opts.values():
             final_triggers = opt.final_triggers
             for trigger in final_triggers:
@@ -92,6 +128,7 @@ class OptionGroup(Option, Group):
             raise Exception("First argument has to start with a '-': {args[0]}")
 
         if args[0] in self._stored_trigger_mapping:
+            self._num_splits_processed += 1
             return self._stored_trigger_mapping[args[0]].process_split(args)
         else:
             raise UnexpectedTriggerError(f"Trigger {args[0]} not in mapping")
@@ -104,17 +141,27 @@ class OptionGroup(Option, Group):
         self._opts[name] = option
 
     @property
+    def args(self) -> Tuple[Any, ...]:
+        return ()
+
+    @property
     def kwargs(self) -> Dict[str, Any]:
-        for opt_name, opt in self._opts.items():
-            if opt.value == ...:
-                raise UnspecifiedOptionError(
-                    f"Argument {opt_name} was not specified and has no default"
-                )
         return {key: opt.value for key, opt in self._opts.items()}
 
+    @property
+    def value(self) -> Any:
+        if self._num_splits_processed > 0:
+            return self._exec_obj()
+        elif self._default_value != ...:
+            return self._default_value
+        else:
+            raise UnspecifiedOptionError(
+                "No Options in the group specified and and has no default"
+            )
 
-@mutable(slots=False)
-class ArgumentGroup(Argument, Group):
+
+@mutable(slots=False, kw_only=True)
+class ArgumentGroup(Group):
     _args: Dict[str, Argument] = field(factory=dict, init=False)
 
     def add_arg(self, name: str, argument: Argument):
@@ -132,7 +179,7 @@ class ArgumentGroup(Argument, Group):
 
         # go through the stored arguments to the first unprocessed one
         for argument in self._args.values():
-            if argument.times_called == 0:
+            if argument.unset:
                 return argument.process_split(args)
 
         raise NothingProcessedError(f"No arguments were processed for {args}")
@@ -146,10 +193,13 @@ class ArgumentGroup(Argument, Group):
                 )
         return tuple((arg.value for arg in self._args.values()))
 
+    @property
+    def kwargs(self) -> Dict[str, Any]:
+        return {}
 
-@mutable(slots=False)
-class ParameterGroup(Parameter, Group):
-    descr: str
+
+@mutable(slots=False, kw_only=True)
+class ParameterGroup(Group):
     _arg_group: ArgumentGroup = field(factory=ArgumentGroup, init=False)
     _opt_group: OptionGroup = field(
         factory=partial(OptionGroup, descr="", prefix="", name=""), init=False
@@ -179,3 +229,7 @@ class ParameterGroup(Parameter, Group):
     @property
     def kwargs(self) -> Dict[str, Any]:
         return self._opt_group.kwargs
+
+    @property
+    def value(self) -> Any:
+        return self._exec_obj()

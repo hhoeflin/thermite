@@ -38,6 +38,10 @@ class UnspecifiedArgumentError(UnspecifiedParameterError):
     pass
 
 
+class UnspecifiedObjError(Exception):
+    pass
+
+
 class UnprocessedArgumentError(Exception):
     pass
 
