@@ -1,17 +1,18 @@
 import inspect
-from typing import List, Sequence, Type, get_args, get_origin
+from typing import Callable, List, Sequence, Type, Union, get_args, get_origin
 
 from thermite.type_converters import ComplexTypeConverterFactory
 from thermite.utils import clify_argname
 
 from .base import BoolOption, KnownLenArg, KnownLenOpt, NoOpOption, Parameter
+from .group import ParameterGroup
 
 
 def process_parameter(
     param: inspect.Parameter,
     description: str,
     complex_factory: ComplexTypeConverterFactory,
-) -> Parameter:
+) -> Union[Parameter, ParameterGroup]:
     """
     Process a function parameter into a thermite parameter
     """
@@ -98,8 +99,10 @@ def process_parameter(
             except TypeError:
                 # see if this could be done using a class option group
                 if inspect.isclass(annot_to_use):
-                    # it is a class that we want to use
-                    raise NotImplementedError
+                    return process_class_to_param_group(
+                        klass=annot_to_use,
+                        complex_factory=complex_factory,
+                    )
             raise NotImplementedError()
 
     elif param.kind == inspect.Parameter.VAR_KEYWORD:
@@ -107,3 +110,53 @@ def process_parameter(
         raise NotImplementedError("VAR_KEYWORDS not yet supported")
     else:
         raise Exception(f"Unknown value for kind: {param.kind}")
+
+
+def process_function_to_param_group(
+    func: Callable, complex_factory: ComplexTypeConverterFactory
+) -> ParameterGroup:
+    func_sig = inspect.signature(func)
+
+    param_group = ParameterGroup(
+        descr="",
+        obj=func,
+        expected_ret_type=func_sig.return_annotation,
+    )
+    for param in func_sig.parameters.values():
+        cli_param = process_parameter(
+            param=param, description="", complex_factory=complex_factory
+        )
+        if param.kind == inspect.Parameter.POSITIONAL_ONLY:
+            param_group.posargs.append(cli_param)
+        elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+            param_group.varposargs.append(cli_param)
+        else:
+            param_group.kwargs[param.name] = cli_param
+
+    return param_group
+
+
+def process_class_to_param_group(
+    klass: Type,
+    complex_factory: ComplexTypeConverterFactory,
+) -> ParameterGroup:
+    init_sig = inspect.signature(klass.__init__)
+
+    # the signature has self at the beginning that we need to ignore
+    param_group = ParameterGroup(descr="", obj=klass, expected_ret_type=klass)
+    for count, param in enumerate(init_sig.parameters.values()):
+        if count == 0:
+            # this is self
+            continue
+        else:
+            cli_param = process_parameter(
+                param=param, description="", complex_factory=complex_factory
+            )
+            if param.kind == inspect.Parameter.POSITIONAL_ONLY:
+                param_group.posargs.append(cli_param)
+            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                param_group.varposargs.append(cli_param)
+            else:
+                param_group.kwargs[param.name] = cli_param
+
+    return param_group

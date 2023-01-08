@@ -7,8 +7,12 @@ from .base import (
     Option,
     Parameter,
 )
-from .create import process_parameter
-from .group import ArgumentGroup, OptionGroup, ParameterGroup
+from .create import (
+    process_class_to_param_group,
+    process_function_to_param_group,
+    process_parameter,
+)
+from .group import ParameterGroup
 
 __all__ = [
     "Argument",
@@ -18,8 +22,8 @@ __all__ = [
     "KnownLenOpt",
     "Option",
     "Parameter",
-    "ArgumentGroup",
-    "OptionGroup",
     "ParameterGroup",
     "process_parameter",
+    "process_function_to_param_group",
+    "process_class_to_param_group",
 ]

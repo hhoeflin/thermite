@@ -5,7 +5,11 @@ from typing import Any, Callable, ClassVar, Dict, Sequence, Type
 from attrs import mutable
 
 from .exceptions import NothingProcessedError, UnprocessedArgumentError
-from .parameters import ParameterGroup, process_parameter
+from .parameters import (
+    ParameterGroup,
+    process_class_to_param_group,
+    process_function_to_param_group,
+)
 from .preprocessing import split_and_expand
 from .type_converters import ComplexTypeConverterFactory
 
@@ -28,19 +32,10 @@ class Command:
 
     @classmethod
     def _from_function(cls, func: Callable):
-        func_sig = inspect.signature(func)
 
-        param_group = ParameterGroup(
-            descr="", obj=func, expected_ret_type=func_sig.return_annotation
+        param_group = process_function_to_param_group(
+            func, complex_factory=cls._complex_factory
         )
-        for param in func_sig.parameters.values():
-            param_group.add_param(
-                name=param.name,
-                param=process_parameter(
-                    param=param, description="", complex_factory=cls._complex_factory
-                ),
-            )
-
         return cls(
             param_group=param_group,
             subcommand_objs={},
@@ -48,23 +43,9 @@ class Command:
 
     @classmethod
     def _from_class(cls, klass: Type):
-        init_sig = inspect.signature(klass.__init__)
-
-        # the signature has self at the beginning that we need to ignore
-        param_group = ParameterGroup(descr="", obj=klass, expected_ret_type=klass)
-        for count, param in enumerate(init_sig.parameters.values()):
-            if count == 0:
-                # this is self
-                continue
-            else:
-                param_group.add_param(
-                    name=param.name,
-                    param=process_parameter(
-                        param=param,
-                        description="",
-                        complex_factory=cls._complex_factory,
-                    ),
-                )
+        param_group = process_class_to_param_group(
+            klass, complex_factory=cls._complex_factory
+        )
 
         return cls(
             param_group=param_group,
@@ -108,5 +89,4 @@ class Command:
                 raise Exception("Input args have same length as return args")
             if len(args_return) > 0:
                 input_args_deque.appendleft(args_return)
-
         return self.param_group.value

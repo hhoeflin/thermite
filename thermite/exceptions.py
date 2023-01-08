@@ -45,5 +45,14 @@ class UnspecifiedObjError(Exception):
 class UnprocessedArgumentError(Exception):
     pass
 
+
 class UnexpectedReturnTypeError(Exception):
+    pass
+
+
+class UnknownArgumentError(Exception):
+    pass
+
+
+class UnknownOptionError(Exception):
     pass
