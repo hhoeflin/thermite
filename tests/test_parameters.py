@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple
+from typing import List, Tuple
 
 import pytest
 from attrs import mutable
@@ -9,14 +9,8 @@ from thermite.exceptions import (
     UnexpectedTriggerError,
     UnspecifiedOptionError,
 )
-from thermite.parameters import (
-    BoolOption,
-    KnownLenArg,
-    KnownLenOpt,
-    NoOpOption,
-    Option,
-    Parameter,
-)
+from thermite.parameters import BoolOption, KnownLenArg, KnownLenOpt, Option, Parameter
+from thermite.type_converters import ListCLIArgConverter, PathCLIArgConverter
 
 
 @mutable
@@ -52,10 +46,12 @@ class TestBoolOption:
         """Test that BoolOption works as expected."""
 
         opt = BoolOption(
+            name="a",
             descr="test",
             pos_triggers=pos_triggers,
             neg_triggers=neg_triggers,
             prefix=prefix,
+            default_value=...,
         )
         if val_exp == ...:
             # raises an error
@@ -67,17 +63,36 @@ class TestBoolOption:
             assert ret_args == ret_args_exp
 
     def test_unused(self):
-        opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
+        opt = BoolOption(
+            name="a",
+            descr="test",
+            pos_triggers=("-a",),
+            neg_triggers=(),
+            default_value=...,
+        )
         with pytest.raises(UnspecifiedOptionError):
             opt.value
 
     def test_too_few_args(self):
-        opt = BoolOption(descr="test", pos_triggers=("-a",), neg_triggers=())
+        opt = BoolOption(
+            name="a",
+            descr="test",
+            pos_triggers=("-a",),
+            neg_triggers=(),
+            default_value=...,
+        )
         with pytest.raises(TooFewInputsError):
             opt.process_split([])
 
     def test_multiple_process(self):
-        opt = BoolOption(descr="test", pos_triggers=("--yes",), neg_triggers=("--no",))
+        opt = BoolOption(
+            name="a",
+            descr="test",
+            pos_triggers=("--yes",),
+            neg_triggers=("--no",),
+            default_value=...,
+            multiple=True,
+        )
         opt.process_split(["--yes"])
         assert opt.value is True
 
@@ -85,20 +100,24 @@ class TestBoolOption:
         assert opt.value is False
 
     def test_isinstance_option(self):
-        opt = BoolOption(descr="test", pos_triggers=("--yes",), neg_triggers=("--no",))
+        opt = BoolOption(
+            name="a",
+            descr="test",
+            pos_triggers=("--yes",),
+            neg_triggers=("--no",),
+            default_value=...,
+        )
         assert isinstance(opt, Option)
 
     def test_isinstance_parameter(self):
-        opt = BoolOption(descr="test", pos_triggers=("--yes",), neg_triggers=("--no",))
+        opt = BoolOption(
+            name="a",
+            descr="test",
+            pos_triggers=("--yes",),
+            neg_triggers=("--no",),
+            default_value=...,
+        )
         assert isinstance(opt, Parameter)
-
-
-class TestNoOpOption:
-    def test_usage(self):
-        opt = NoOpOption(descr="test", triggers=("-0",))
-        proc_ret = opt.process_split(["-0", "other"])
-        assert proc_ret == ["other"]
-        assert opt.value is None
 
 
 class TestKnownLenOpt:
@@ -134,12 +153,12 @@ class TestKnownLenOpt:
         """Test that BoolOption works as expected."""
 
         opt = KnownLenOpt(
+            name="a",
             descr="Path option",
             triggers=triggers,
-            value=...,
-            nargs=1,
-            type_converter=Path,
-            callback=None,
+            default_value=...,
+            type_converter=PathCLIArgConverter(Path),
+            target_type_str="Path",
             multiple=False,
             prefix=prefix,
         )
@@ -154,25 +173,25 @@ class TestKnownLenOpt:
 
     def test_too_few_args(self):
         opt = KnownLenOpt(
+            name="a",
             descr="Path option",
             triggers=("--path", "-p"),
-            value=[],
-            nargs=1,
-            type_converter=Path,
-            callback=None,
+            default_value=[],
+            type_converter=PathCLIArgConverter(Path),
+            target_type_str="Path",
             multiple=True,
         )
         with pytest.raises(TooFewInputsError):
             opt.process_split(["--path"])
 
-    def test_path_opt_multi(self):
+    def test_path_opt_multi(self, store):
         opt = KnownLenOpt(
+            name="a",
             descr="Path option",
             triggers=("--path", "-p"),
-            value=[],
-            nargs=1,
-            type_converter=Path,
-            callback=None,
+            default_value=[],
+            type_converter=ListCLIArgConverter(List[Path], store=store),
+            target_type_str="Path",
             multiple=True,
         )
         opt.process_split(["--path", "/a/b"])
@@ -183,13 +202,15 @@ class TestKnownLenOpt:
 class TestKnownLenArgs:
     def path_arg(self) -> KnownLenArg:
         arg = KnownLenArg(
+            name="a",
             descr="Path option",
-            value=...,
-            nargs=1,
-            type_converter=Path,
+            default_value=...,
+            type_converter=PathCLIArgConverter(Path),
+            target_type_str="Path",
             callback=None,
         )
         return arg
+
     def test_path_arg(self):
         path_arg = self.path_arg()
         path_arg.process_split(["/a/b"])

@@ -8,9 +8,9 @@ from thermite.exceptions import (
     UnexpectedTriggerError,
     UnspecifiedArgumentError,
     UnspecifiedOptionError,
-    UnspecifiedParameterError,
 )
-from thermite.type_converters import TypeConverter
+from thermite.help import ArgHelp, OptHelp
+from thermite.type_converters import CLIArgConverterBase
 
 EllipsisType = type(...)
 
@@ -19,10 +19,15 @@ EllipsisType = type(...)
 class Parameter(ABC):
     """Base class for Parameters."""
 
-    descr: str = field(default="")
-    name: str = field(default="")
+    descr: Optional[str] = field(default=None)
+    name: str
+    default_value: Any
     _num_splits_processed: int = field(default=0, init=False)
-    _value: Any = field(default=...)
+
+    @property
+    @abstractmethod
+    def nargs(self) -> int:
+        ...
 
     @abstractmethod
     def process_split(self, args: Sequence[str]) -> List[str]:
@@ -30,13 +35,18 @@ class Parameter(ABC):
         ...
 
     @property
+    def unset(self) -> bool:
+        return self._num_splits_processed == 0
+
+    @property
     @abstractmethod
-    def value(self) -> Any:
+    def target_type_str(self) -> str:
         ...
 
     @property
-    def unset(self) -> bool:
-        return self._num_splits_processed == 0
+    @abstractmethod
+    def value(self) -> Any:
+        ...
 
 
 @mutable(slots=False, kw_only=True)
@@ -44,6 +54,7 @@ class Option(Parameter):
     """Base class for Options."""
 
     _prefix: str = ""
+    multiple: bool = False
 
     @property
     def prefix(self) -> str:
@@ -63,14 +74,6 @@ class Option(Parameter):
     def final_trigger_help(self) -> str:
         ...
 
-    @property
-    def value(self) -> Any:
-        if self._value == ...:
-            raise UnspecifiedOptionError(
-                f"Paramter {self.name} was not specified and has no default"
-            )
-        return self._value
-
     def _adjust_triggers(self, triggers: Set[str]) -> Set[str]:
         if self.prefix == "":
             return set(triggers)
@@ -80,6 +83,15 @@ class Option(Parameter):
                 [f"--{self.prefix}-{trigger[2:]}" for trigger in filtered_triggers]
             )
 
+    def help(self) -> OptHelp:
+        default_str = str(self.default_value) if self.default_value != ... else ""
+        return OptHelp(
+            triggers=self.final_trigger_help,
+            type_descr=self.target_type_str,
+            default=default_str,
+            descr=self.descr if self.descr is not None else "",
+        )
+
 
 @mutable(slots=False, kw_only=True)
 class BoolOption(Option):
@@ -88,6 +100,10 @@ class BoolOption(Option):
     pos_triggers: Set[str] = field(converter=set)
     neg_triggers: Set[str] = field(converter=set)
     _value: Union[bool, EllipsisType] = field(default=...)  # type: ignore
+
+    @property
+    def nargs(self) -> int:
+        return 0
 
     @property
     def final_pos_triggers(self) -> Set[str]:
@@ -114,18 +130,37 @@ class BoolOption(Option):
         if len(args) == 0:
             raise TooFewInputsError("Expected at least one input argument, got none.")
 
-        # check that the argument given matches the triggers
-        if args[0] in self.final_pos_triggers:
-            self._value = True
-        elif args[0] in self.final_neg_triggers:
-            self._value = False
+        if self._num_splits_processed == 0 or self.multiple:
+            # check that the argument given matches the triggers
+            if args[0] in self.final_pos_triggers:
+                self._value = True
+            elif args[0] in self.final_neg_triggers:
+                self._value = False
+            else:
+                raise UnexpectedTriggerError(
+                    f"Option {args[0]} not registered as a trigger."
+                )
+            self._num_splits_processed += 1
         else:
-            raise UnexpectedTriggerError(
-                f"Option {args[0]} not registered as a trigger."
-            )
-        self._num_splits_processed += 1
+            raise Exception("Multiple calls not allowed")
 
         return list(args[1:])
+
+    @property
+    def target_type_str(self) -> str:
+        return "Bool"
+
+    @property
+    def value(self) -> bool:
+        if self.unset:
+            if self.default_value == ...:
+                raise UnspecifiedOptionError(
+                    f"Paramter {self.name} was not specified and has no default"
+                )
+            else:
+                return self.default_value
+        else:
+            return self._value
 
 
 @mutable(slots=False, kw_only=True)
@@ -133,10 +168,12 @@ class KnownLenOpt(Option):
     """Base class for options of known length."""
 
     triggers: Set[str] = field(converter=set)
-    nargs: int
-    type_converter: TypeConverter
-    multiple: bool
-    callback: Optional[Callable[[Any], Any]] = field(default=None)
+    _target_type_str: str
+    type_converter: CLIArgConverterBase
+
+    @property
+    def nargs(self) -> int:
+        return self.type_converter.num_required_args
 
     def __attrs_post_init__(self):
         # if multiple is true, it has to be a list
@@ -153,19 +190,11 @@ class KnownLenOpt(Option):
 
     def _process_args(self, args: Sequence[str]) -> None:
         """Process the arguments and store in value."""
-        args_value = self.type_converter(*args)
-        if self.callback is not None:
-            args_value = self.callback(args_value)
-
-        if self.multiple:
-            if self._num_splits_processed == 0:
-                self._value = [args_value]
-            else:
-                self._value.append(args_value)
+        if self._num_splits_processed == 0 or self.multiple:
+            self.type_converter.bind(args)
+            self._num_splits_processed += 1
         else:
-            self._value = args_value
-
-        self._num_splits_processed += 1
+            raise Exception("Multiple calls not allowed")
 
     def process_split(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""
@@ -190,56 +219,57 @@ class KnownLenOpt(Option):
         self._process_args(args[1 : (self.nargs + 1)])
         return list(args[(self.nargs + 1) :])
 
+    @property
+    def target_type_str(self) -> str:
+        return self._target_type_str
 
-def none_converter(*args) -> None:
-    """Convert to None."""
-    del args
-    return None
+    @target_type_str.setter
+    def target_type_str(self, value: str):
+        self._target_type_str = value
 
-
-class NoOpOption(KnownLenOpt):
-    """Option that performs no operation."""
-
-    def __init__(self, descr: str, triggers: Set[str]):
-        """Initialize no-op option."""
-        super().__init__(
-            descr=descr,
-            triggers=set(triggers),  # type: ignore
-            nargs=0,
-            value=...,
-            type_converter=none_converter,
-            callback=None,
-            multiple=False,
-        )
+    @property
+    def value(self) -> Any:
+        if self.unset:
+            if self.default_value == ...:
+                raise UnspecifiedOptionError(
+                    f"Paramter {self.name} was not specified and has no default"
+                )
+            else:
+                return self.default_value
+        else:
+            return self.type_converter.value
 
 
 @mutable(slots=False, kw_only=True)
 class Argument(Parameter):
-    @property
-    def value(self) -> Any:
-        if self._value == ...:
-            raise UnspecifiedArgumentError(
-                f"Paramter {self.name} was not specified and has no default"
-            )
-        return self._value
+    def help(self) -> ArgHelp:
+        default_str = str(self.default_value) if self.default_value != ... else ""
+        return ArgHelp(
+            name=self.name,
+            type_descr=self.target_type_str,
+            default=default_str,
+            descr=self.descr if self.descr is not None else "",
+        )
 
 
 @mutable(slots=False, kw_only=True)
 class KnownLenArg(Argument):
 
-    nargs: int
-    type_converter: TypeConverter
+    _target_type_str: str
     callback: Optional[Callable[[Any], Any]] = field(default=None)
+    type_converter: CLIArgConverterBase
+
+    @property
+    def nargs(self) -> int:
+        return self.type_converter.num_required_args
 
     def _process_args(self, args: Sequence[str]) -> None:
         """Process the arguments and store in value."""
-        args_value = self.type_converter(*args)
-        if self.callback is not None:
-            args_value = self.callback(args_value)
-
-        self._value = args_value
-
-        self._num_splits_processed += 1
+        if self._num_splits_processed == 0:
+            self.type_converter.bind(args)
+            self._num_splits_processed += 1
+        else:
+            raise Exception("Multiple calls not allowed")
 
     def process_split(self, args: Sequence[str]) -> List[str]:
         """Implement of general argument processing."""
@@ -257,3 +287,23 @@ class KnownLenArg(Argument):
             )
         self._process_args(args[: self.nargs])
         return list(args[self.nargs :])
+
+    @property
+    def target_type_str(self) -> str:
+        return self._target_type_str
+
+    @target_type_str.setter
+    def target_type_str(self, value: str):
+        self._target_type_str = value
+
+    @property
+    def value(self) -> Any:
+        if self.unset:
+            if self.default_value == ...:
+                raise UnspecifiedArgumentError(
+                    f"Paramter {self.name} was not specified and has no default"
+                )
+            else:
+                return self.default_value
+        else:
+            return self.type_converter.value

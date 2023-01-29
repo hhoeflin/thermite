@@ -13,7 +13,8 @@ dependencies = [
     "rich",
     "more_itertools",
     "attrs",
-    "beartype"
+    "beartype",
+    "docstring-parser",
 ]
 
 

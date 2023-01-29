@@ -4,6 +4,8 @@ from typing import Any, Callable, ClassVar, Dict, Sequence, Type
 
 from attrs import mutable
 
+from thermite.help import CommandHelp
+
 from .exceptions import NothingProcessedError, UnprocessedArgumentError
 from .parameters import (
     ParameterGroup,
@@ -90,3 +92,28 @@ class Command:
             if len(args_return) > 0:
                 input_args_deque.appendleft(args_return)
         return self.param_group.value
+
+    @property
+    def usage(self) -> str:
+        return "Not yet implemented"
+
+    def help(self) -> CommandHelp:
+        # argument help to show
+        args = [x.help() for x in self.param_group.cli_args]
+
+        # the options don't need a special name or description;
+        # that is intended for subgroups
+        opt_group = self.param_group.help_opts_only()
+        opt_group.name = "Options"
+        opt_group.descr = None
+
+        # last we need the subcommands and their descriptions
+        subcommands = {key: "" for key, obj in self.subcommand_objs.items()}
+
+        return CommandHelp(
+            descr=self.param_group.descr,
+            usage=self.usage,
+            args=args,
+            opt_group=opt_group,
+            subcommands=subcommands,
+        )

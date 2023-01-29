@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, Dict, List, Sequence, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
@@ -11,6 +11,7 @@ from thermite.exceptions import (
     UnprocessedArgumentError,
     UnspecifiedObjError,
 )
+from thermite.help import OptionGroupHelp
 
 from .base import Argument, Option, Parameter
 
@@ -19,7 +20,7 @@ EllipsisType = type(...)
 
 @mutable(slots=False, kw_only=True)
 class ParameterGroup:
-    descr: str = ""
+    descr: Optional[str] = None
     obj: Any = None
     expected_ret_type: object = None
     posargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
@@ -28,7 +29,7 @@ class ParameterGroup:
     _num_splits_processed: int = field(default=0, init=False)
     _prefix: str = ""
     _name: str = ""
-    _default_value: Any = field(default=...)
+    default_value: Any = field(default=...)
 
     def _exec_obj(self) -> Any:
         if self.obj is None:
@@ -140,6 +141,19 @@ class ParameterGroup:
         for opt in self.cli_opts:
             all_triggers.update(opt.final_triggers)
         return all_triggers
+
+    def help_opts_only(self) -> OptionGroupHelp:
+        cli_opts = self.cli_opts
+
+        cli_opts_single = [x for x in cli_opts if isinstance(x, Option)]
+        cli_opts_group = [x for x in cli_opts if isinstance(x, ParameterGroup)]
+
+        return OptionGroupHelp(
+            name=self.name,
+            descr=self.descr,
+            gen_opts=[x.help() for x in cli_opts_single],
+            opt_groups=[x.help_opts_only() for x in cli_opts_group],
+        )
 
 
 def map_trigger_to_opts(

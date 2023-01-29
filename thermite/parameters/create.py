@@ -1,17 +1,30 @@
 import inspect
-from typing import Callable, List, Sequence, Type, Union, get_args, get_origin
+from collections import defaultdict
+from typing import (
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
 
-from thermite.type_converters import ComplexTypeConverterFactory
+from docstring_parser import Docstring, parse
+
+from thermite.type_converters import CLIArgConverterStore
 from thermite.utils import clify_argname
 
-from .base import BoolOption, KnownLenArg, KnownLenOpt, NoOpOption, Parameter
+from .base import BoolOption, KnownLenArg, KnownLenOpt, Parameter
 from .group import ParameterGroup
 
 
 def process_parameter(
     param: inspect.Parameter,
-    description: str,
-    complex_factory: ComplexTypeConverterFactory,
+    description: Optional[str],
+    store: CLIArgConverterStore,
 ) -> Union[Parameter, ParameterGroup]:
     """
     Process a function parameter into a thermite parameter
@@ -33,13 +46,14 @@ def process_parameter(
 
     # check if is should be an argument or an option
     if param.kind == inspect.Parameter.POSITIONAL_ONLY:
-        conv_nargs = complex_factory.converter_factory(annot_to_use)
+        conv = store.get_converter(annot_to_use)
         # single argument
         return KnownLenArg(
+            name=param.name,
             descr=description,
-            nargs=conv_nargs.nargs,
-            value=default_val,
-            type_converter=conv_nargs.converter,
+            default_value=default_val,
+            type_converter=conv,
+            target_type_str=str(annot_to_use),
             callback=None,
         )
     elif param.kind == inspect.Parameter.VAR_POSITIONAL:
@@ -47,12 +61,13 @@ def process_parameter(
         # the converter needs to be changed; the type annotation is per item,
         # not for the whole list
         annot_to_use = List[annot_to_use]  # type: ignore
-        conv_nargs = complex_factory.converter_factory(annot_to_use)
+        conv = store.get_converter(annot_to_use)
         return KnownLenArg(
+            name=param.name,
             descr=description,
-            nargs=conv_nargs.nargs,
-            value=default_val,
-            type_converter=conv_nargs.converter,
+            default_value=default_val,
+            type_converter=conv,
+            target_type_str=str(annot_to_use),
             callback=None,
         )
     elif param.kind in (
@@ -62,7 +77,8 @@ def process_parameter(
         if annot_to_use == bool:
             # need to use a bool-option
             return BoolOption(
-                value=default_val,
+                name=param.name,
+                default_value=default_val,
                 descr=description,
                 pos_triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                 neg_triggers=[f"--no-{clify_argname(param.name)}"],  # type: ignore
@@ -76,34 +92,37 @@ def process_parameter(
             else:
                 raise TypeError(f"{str(annot_to_use)} has more than 1 argument.")
 
-            conv_nargs = complex_factory.converter_factory(inner_type)
+            conv = store.get_converter(inner_type)
             return KnownLenOpt(
+                name=param.name,
                 descr=description,
-                value=default_val,
-                nargs=conv_nargs.nargs,
-                type_converter=conv_nargs.converter,
+                default_value=default_val,
+                type_converter=conv,
+                target_type_str=str(annot_to_use),
                 triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                 multiple=True,
             )
         else:
             try:
-                conv_nargs = complex_factory.converter_factory(annot_to_use)
+                conv = store.get_converter(annot_to_use)
                 return KnownLenOpt(
+                    name=param.name,
                     descr=description,
-                    value=default_val,
-                    nargs=conv_nargs.nargs,
-                    type_converter=conv_nargs.converter,
+                    default_value=default_val,
+                    target_type_str=str(annot_to_use),
+                    type_converter=conv,
                     triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                     multiple=False,
                 )
-            except TypeError:
+            except ValueError:
                 # see if this could be done using a class option group
                 if inspect.isclass(annot_to_use):
-                    return process_class_to_param_group(
+                    res = process_class_to_param_group(
                         klass=annot_to_use,
-                        complex_factory=complex_factory,
+                        store=store,
                     )
-            raise NotImplementedError()
+                    res.name = param.name
+                    return res
 
     elif param.kind == inspect.Parameter.VAR_KEYWORD:
         # not yet a solution; should allow to pass any option
@@ -112,19 +131,37 @@ def process_parameter(
         raise Exception(f"Unknown value for kind: {param.kind}")
 
 
+def doc_to_dict(doc_parsed: Docstring) -> Dict[str, Optional[str]]:
+    res: Dict[str, Optional[str]] = defaultdict(lambda: None)
+    res.update({x.arg_name: x.description for x in doc_parsed.params})
+    return res
+
+
 def process_function_to_param_group(
-    func: Callable, complex_factory: ComplexTypeConverterFactory
+    func: Callable, store: CLIArgConverterStore
 ) -> ParameterGroup:
     func_sig = inspect.signature(func)
 
+    # preprocess the documentation
+    func_doc = inspect.getdoc(func)
+    if func_doc is not None:
+        doc_parsed = parse(func_doc)
+        short_description = doc_parsed.short_description
+        args_doc_dict = doc_to_dict(doc_parsed)
+    else:
+        short_description = None
+        args_doc_dict = defaultdict(lambda: None)
+
     param_group = ParameterGroup(
-        descr="",
+        descr=short_description,
         obj=func,
         expected_ret_type=func_sig.return_annotation,
     )
     for param in func_sig.parameters.values():
         cli_param = process_parameter(
-            param=param, description="", complex_factory=complex_factory
+            param=param,
+            description=args_doc_dict[param.name],
+            store=store,
         )
         if param.kind == inspect.Parameter.POSITIONAL_ONLY:
             param_group.posargs.append(cli_param)
@@ -138,19 +175,38 @@ def process_function_to_param_group(
 
 def process_class_to_param_group(
     klass: Type,
-    complex_factory: ComplexTypeConverterFactory,
+    store: CLIArgConverterStore,
 ) -> ParameterGroup:
     init_sig = inspect.signature(klass.__init__)
 
+    # get the documentation
+    klass_doc = inspect.getdoc(klass)
+    init_doc = inspect.getdoc(klass.__init__)
+    if klass_doc is not None:
+        klass_doc_parsed = parse(klass_doc)
+        short_description = klass_doc_parsed.short_description
+    else:
+        short_description = None
+
+    if init_doc is not None:
+        init_doc_parsed = parse(init_doc)
+        args_doc_dict = doc_to_dict(init_doc_parsed)
+    else:
+        args_doc_dict = defaultdict(lambda: None)
+
     # the signature has self at the beginning that we need to ignore
-    param_group = ParameterGroup(descr="", obj=klass, expected_ret_type=klass)
+    param_group = ParameterGroup(
+        descr=short_description, obj=klass, expected_ret_type=klass
+    )
     for count, param in enumerate(init_sig.parameters.values()):
         if count == 0:
             # this is self
             continue
         else:
             cli_param = process_parameter(
-                param=param, description="", complex_factory=complex_factory
+                param=param,
+                description=args_doc_dict[param.name],
+                store=store,
             )
             if param.kind == inspect.Parameter.POSITIONAL_ONLY:
                 param_group.posargs.append(cli_param)

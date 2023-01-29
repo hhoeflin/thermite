@@ -1,6 +1,8 @@
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import pytest
+from attrs import mutable
+from rich.console import Console
 
 from thermite.command import Command
 from thermite.exceptions import (
@@ -35,10 +37,10 @@ def example_func_pos_only(a: int, b: str = "1", /) -> Tuple[int, str]:
     return (a, b)
 
 
+@mutable(slots=False, kw_only=True)
 class ExampleClassKwOnly:
-    def __init__(self, a: int, b: str = "test"):
-        self.a = a
-        self.b = b
+    a: int
+    b: str = "test"
 
     @classmethod
     def clsmethod(cls, c: bool):
@@ -50,6 +52,11 @@ class ExampleClassKwOnly:
 
     def method(self):
         return self.b
+
+
+@mutable(slots=False, kw_only=True)
+class ExampleNested:
+    d: ExampleClassKwOnly
 
 
 class TestCommandFromFunction:
@@ -105,6 +112,13 @@ class TestCommandFromFunction:
                 (),
                 {"a": 1, "b": "test"},
             ),
+            (
+                ExampleNested,
+                ("--d-a", "1", "--d-b", "test"),
+                None,
+                (),
+                {"d": ExampleClassKwOnly(a=1, b="test")},
+            ),
         ],
     )
     def test_value(
@@ -126,3 +140,9 @@ class TestCommandFromFunction:
             command.process_multiple(input_args)
             assert command.param_group.args_values == output_args
             assert command.param_group.kwargs_values == output_kwargs
+
+
+if __name__ == "__main__":
+    command = Command.from_obj(ExampleNested)
+    console = Console()
+    console.print(command.help())
