@@ -53,7 +53,7 @@ def test_store(
     nargs: int,
 ):
     converter = store.get_converter(target_type)
-    assert converter.num_required_args == nargs
+    assert converter.num_required_args.max == nargs
     if expected is not None:
         converter.bind(args)
         res = converter.value

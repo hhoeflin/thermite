@@ -171,14 +171,14 @@ class KnownLenOpt(Option):
     _target_type_str: str
     type_converter: CLIArgConverterBase
 
-    @property
-    def nargs(self) -> int:
-        return self.type_converter.num_required_args
-
     def __attrs_post_init__(self):
         # if multiple is true, it has to be a list
         if self.multiple:
             assert isinstance(self.value, list)
+
+    @property
+    def nargs(self) -> int:
+        return self.type_converter.num_required_args.min
 
     @property
     def final_triggers(self) -> Set[str]:
@@ -261,7 +261,7 @@ class KnownLenArg(Argument):
 
     @property
     def nargs(self) -> int:
-        return self.type_converter.num_required_args
+        return self.type_converter.num_required_args.max
 
     def _process_args(self, args: Sequence[str]) -> None:
         """Process the arguments and store in value."""

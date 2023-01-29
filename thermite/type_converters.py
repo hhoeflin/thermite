@@ -43,10 +43,16 @@ class CLIArgConverterError(Exception):
     ...
 
 
+@mutable()
+class NumReqArgs:
+    min: int
+    max: int
+
+
 class CLIArgConverterBase(ABC):
     @property
     @abstractmethod
-    def num_required_args(self) -> int:
+    def num_required_args(self) -> NumReqArgs:
         ...
 
     @property
@@ -82,6 +88,15 @@ class CLIArgConverterBase(ABC):
     def convert(self, *args: str) -> Any:
         ...
 
+    @abstractmethod
+    def reset_bind(self) -> None:
+        ...
+
+    @property
+    @abstractmethod
+    def supports_bind_append(self) -> bool:
+        ...
+
 
 @mutable(slots=False)
 class CLIArgConverterSimple(CLIArgConverterBase):
@@ -107,8 +122,8 @@ class BasicCLIArgConverter(CLIArgConverterSimple):
             )
 
     @property
-    def num_required_args(self) -> int:
-        return 1
+    def num_required_args(self) -> NumReqArgs:
+        return NumReqArgs(1, 1)
 
     @property
     def target_type(self) -> Type:
@@ -123,6 +138,13 @@ class BasicCLIArgConverter(CLIArgConverterSimple):
             elif len(args) > 1:
                 raise TooManyArgsError()
             self._bound_arg = args[0]
+
+    def reset_bind(self) -> None:
+        self._bound_arg = None
+
+    @property
+    def supports_bind_append(self) -> bool:
+        return False
 
     @property
     def bound_args(self) -> List[str]:
@@ -294,7 +316,7 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
 
     _bound_args: List[str] = field(factory=list, init=False)
     _converters: List[CLIArgConverterBase] = field(factory=list, init=False)
-    _num_required_args: int = field(default=0, init=False)
+    _num_required_args: NumReqArgs = field(default=NumReqArgs(0, 0), init=False)
 
     def __attrs_post_init__(self) -> None:
         if not get_origin(self._target_type) == get_origin(Union[int, str]):
@@ -313,7 +335,7 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
                 )
 
     @property
-    def num_required_args(self) -> int:
+    def num_required_args(self) -> NumReqArgs:
         return self._num_required_args
 
     @property
@@ -324,20 +346,27 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
         if len(self._bound_args) > 0:
             raise RebindingError("A Union type can only be bound once")
         else:
-            if len(args) < self.num_required_args:
+            if len(args) < self.num_required_args.min:
                 raise TooFewArgsError()
-            elif len(args) > self.num_required_args:
+            elif len(args) > self.num_required_args.max:
                 raise TooManyArgsError()
             self._bound_args = list(args)
+
+    def reset_bind(self) -> None:
+        self._bound_args = []
+
+    @property
+    def supports_bind_append(self) -> bool:
+        return False
 
     @property
     def bound_args(self) -> List[str]:
         return self._bound_args
 
     def convert(self, *args: str) -> Any:
-        if len(args) > self.num_required_args:
+        if len(args) > self.num_required_args.max:
             raise TooManyArgsError()
-        elif len(args) < self.num_required_args:
+        elif len(args) < self.num_required_args.min:
             raise TooFewArgsError()
         for converter in self._converters:
             try:
@@ -365,16 +394,15 @@ class ListCLIArgConverter(CLIArgConverterCompound):
             pass
         elif len(type_args) == 1:
             self._inner_converter = self._store.get_converter(type_args[0])
+            inner_num_args = self._inner_converter.num_required_args
+            if inner_num_args.min != inner_num_args.max:
+                raise TypeError("Inner type can't have variable number of args")
         else:
             raise TypeError("Inner type has several arguments.")
 
     @property
-    def num_required_args(self) -> int:
-        return -1
-
-    @property
-    def num_inner_args(self) -> int:
-        return self._inner_converter.num_required_args
+    def num_required_args(self) -> NumReqArgs:
+        return NumReqArgs(self._inner_converter.num_required_args.min, -1)
 
     @property
     def target_type(self) -> Type:
@@ -383,25 +411,32 @@ class ListCLIArgConverter(CLIArgConverterCompound):
     def bind(self, args: Sequence[str]):
         # here we can bind an arbitrary amount, but only
         # multiples of the required arguments
-        req_group_args = self._inner_converter.num_required_args
+        req_group_args = self._inner_converter.num_required_args.min
         num_groups = len(args) // req_group_args
         num_args = num_groups * req_group_args
         if len(args) != num_args:
             raise TooManyArgsError()
         self._bound_args.extend(args[0:num_args])
 
+    def reset_bind(self) -> None:
+        self._bound_args = []
+
+    @property
+    def supports_bind_append(self) -> bool:
+        return True
+
     @property
     def bound_args(self) -> List[str]:
         return self._bound_args
 
     def convert(self, *args: str) -> Any:
-        req_group_args = self.num_inner_args
+        req_group_args = self._inner_converter.num_required_args.min
         num_groups = len(args) // req_group_args
         num_args = num_groups * req_group_args
         if len(args) > num_args:
             raise TooManyArgsError()
         out = []
-        for i in range(0, num_args, self.num_inner_args):
+        for i in range(0, num_args, req_group_args):
             group_args = args[i : (i + req_group_args)]
             out.append(self._inner_converter.convert(*group_args))
         return out
@@ -426,14 +461,20 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
             self._tuple_converters.append(self._store.get_converter(type_arg))
         # ensure that all of them have finite number of required args
         for converter in self._tuple_converters:
-            if converter.num_required_args == -1:
+            if converter.num_required_args.max == -1:
                 raise CLIArgConverterError(
                     "A list is not allowed to be part of a tuple."
                 )
+            if converter.num_required_args.min != converter.num_required_args.max:
+                raise CLIArgConverterError(
+                    "Type in a tuple has to have a constant number of arguments."
+                )
 
     @property
-    def num_required_args(self) -> int:
-        return sum([x.num_required_args for x in self._tuple_converters])
+    def num_required_args(self) -> NumReqArgs:
+        num_args = sum([x.num_required_args.min for x in self._tuple_converters])
+
+        return NumReqArgs(num_args, num_args)
 
     @property
     def target_type(self) -> Type:
@@ -443,25 +484,32 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
         if len(self._bound_args) > 0:
             raise RebindingError("A Union type can only be bound once")
         else:
-            if len(args) < self.num_required_args:
+            if len(args) < self.num_required_args.min:
                 raise TooFewArgsError()
-            if len(args) > self.num_required_args:
+            if len(args) > self.num_required_args.max:
                 raise TooManyArgsError()
             self._bound_args = list(args)
+
+    def reset_bind(self) -> None:
+        self._bound_args = []
+
+    @property
+    def supports_bind_append(self) -> bool:
+        return False
 
     @property
     def bound_args(self) -> List[str]:
         return self._bound_args
 
     def convert(self, *args: str) -> Any:
-        if len(args) > self.num_required_args:
+        if len(args) > self.num_required_args.max:
             raise TooManyArgsError()
-        elif len(args) < self.num_required_args:
+        elif len(args) < self.num_required_args.min:
             raise TooFewArgsError()
         tuple_out = []
         pos = 0
         for converter in self._tuple_converters:
-            tuple_args = args[pos : (pos + converter.num_required_args)]
-            pos = pos + converter.num_required_args
+            tuple_args = args[pos : (pos + converter.num_required_args.min)]
+            pos = pos + converter.num_required_args.min
             tuple_out.append(converter.convert(*tuple_args))
         return tuple(tuple_out)
