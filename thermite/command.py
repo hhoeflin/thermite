@@ -1,18 +1,17 @@
 import inspect
 from inspect import Signature
-from typing import Any, Callable, ClassVar, Dict, Sequence, Type
+from typing import Any, Callable, ClassVar, Dict, List, Sequence, Type
 
 from attrs import mutable
 
 from thermite.help import CommandHelp
 
-from .exceptions import UnprocessedArgumentError
 from .parameters import (
     ParameterGroup,
     process_class_to_param_group,
     process_function_to_param_group,
 )
-from .preprocessing import split_and_expand
+from .preprocessing import split_and_expand, undeque
 from .type_converters import CLIArgConverterStore
 
 
@@ -21,6 +20,10 @@ def extract_subcommands(return_type: Any) -> Dict[str, Any]:
         return {}
     else:
         return {}
+
+
+class UnknownCommandError(Exception):
+    ...
 
 
 @mutable(slots=False)
@@ -57,30 +60,29 @@ class Command:
         else:
             raise NotImplementedError()
 
-    def process(self, args: Sequence[str]) -> Any:
+    def bind_split(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)
 
         while len(input_args_deque) > 0:
             input_args = input_args_deque.popleft()
             args_return = self.param_group.bind_split(input_args)
             if len(args_return) == len(input_args):
-                if input_args[0] in self.subcommand_objs:
-                    # get a subcommand, hand all remaining arguments to it
-                    input_args_deque.appendleft(input_args[1:])
-                    remaining_input_args = list(input_args_deque)
-                    input_args_deque.clear()
-
-                    res_obj = self.param_group.value
-
-                    subcommand = self.from_obj(getattr(res_obj, input_args[0]))
-                    return subcommand.process(remaining_input_args)
-                else:
-                    raise UnprocessedArgumentError(
-                        f"Argument {args} could not be processed"
-                    )
-            if len(args_return) > 0:
+                # we are finished
                 input_args_deque.appendleft(list(args_return))
-        return self.param_group.value
+                return undeque(input_args_deque)
+            if len(args_return) > 0:
+                # push the remaining args back and do another round
+                input_args_deque.appendleft(list(args_return))
+        return []
+
+    def subcommand(self, name: str) -> "Command":
+        if name in self.subcommand_objs:
+            res_obj = self.param_group.value
+            subcommand = self.from_obj(getattr(res_obj, name))
+
+            return subcommand
+        else:
+            raise UnknownCommandError(f"Unknown subcommand {name}")
 
     @property
     def usage(self) -> str:
@@ -106,3 +108,15 @@ class Command:
             opt_group=opt_group,
             subcommands=subcommands,
         )
+
+
+def process_all_args(input_args: List[str], cmd: Command) -> Any:
+    """
+    Processes all input arguments in the context of a command.
+
+    The arguments are processes for the current command, and then
+    followed up with further processing in subcommands as needed.
+    """
+    ...
+    # Note how to do eagery callbacks?
+    # how to do lazy callbacks?

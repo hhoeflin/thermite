@@ -40,3 +40,10 @@ def split_and_expand(args: Sequence[str]) -> Deque[List[str]]:
             pred=lambda x: x.startswith("-"),
         )
     )
+
+
+def undeque(deque_list: Deque[List[str]]) -> List[str]:
+    """
+    Turn a deque of lists of str back into a list of str.
+    """
+    return [y for x in deque_list for y in x]
