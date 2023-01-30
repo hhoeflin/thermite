@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Sequence, Set, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Set, Union
 
 from attrs import field, mutable
 
@@ -15,6 +15,14 @@ from thermite.type_converters import CLIArgConverterBase
 EllipsisType = type(...)
 
 
+class OptionError(Exception):
+    ...
+
+
+class ArgumentError(Exception):
+    ...
+
+
 @mutable(slots=False, kw_only=True)
 class Parameter(ABC):
     """Base class for Parameters."""
@@ -22,7 +30,7 @@ class Parameter(ABC):
     descr: Optional[str] = field(default=None)
     name: str
     default_value: Any
-    _num_splits_processed: int = field(default=0, init=False)
+    _num_bound: int = field(default=0, init=False)
 
     @property
     @abstractmethod
@@ -30,13 +38,13 @@ class Parameter(ABC):
         ...
 
     @abstractmethod
-    def process_split(self, args: Sequence[str]) -> List[str]:
+    def bind(self, args: Sequence[str]) -> None:
         """Get a list of arguments and returns any unused ones."""
         ...
 
     @property
     def unset(self) -> bool:
-        return self._num_splits_processed == 0
+        return self._num_bound == 0
 
     @property
     @abstractmethod
@@ -66,7 +74,7 @@ class Option(Parameter):
 
     @property
     @abstractmethod
-    def final_triggers(self) -> Set[str]:
+    def final_trigger_mappings(self) -> Dict[str, "Option"]:
         ...
 
     @property
@@ -103,7 +111,7 @@ class BoolOption(Option):
 
     @property
     def nargs(self) -> int:
-        return 0
+        return 1
 
     @property
     def final_pos_triggers(self) -> Set[str]:
@@ -114,8 +122,8 @@ class BoolOption(Option):
         return self._adjust_triggers(self.neg_triggers)
 
     @property
-    def final_triggers(self) -> Set[str]:
-        return self.final_pos_triggers | self.final_neg_triggers
+    def final_trigger_mappings(self) -> Dict[str, Option]:
+        return {x: self for x in (self.final_pos_triggers | self.final_neg_triggers)}
 
     @property
     def final_trigger_help(self):
@@ -124,13 +132,16 @@ class BoolOption(Option):
             f"{', '.join(self.final_neg_triggers)}"
         )
 
-    def process_split(self, args: Sequence[str]) -> List[str]:
+    def bind(self, args: Sequence[str]) -> None:
         """Process the arguments."""
-        # check that we have at least one argument
-        if len(args) == 0:
-            raise TooFewInputsError("Expected at least one input argument, got none.")
+        # check that we have at least one argument, the trigger
+        if self.nargs != -1 and len(args) != self.nargs:
+            raise OptionError(
+                f"Incorrect number of arguments. Expected {self.nargs} "
+                f"but got {len(args)}."
+            )
 
-        if self._num_splits_processed == 0 or self.multiple:
+        if self._num_bound == 0 or self.multiple:
             # check that the argument given matches the triggers
             if args[0] in self.final_pos_triggers:
                 self._value = True
@@ -140,11 +151,9 @@ class BoolOption(Option):
                 raise UnexpectedTriggerError(
                     f"Option {args[0]} not registered as a trigger."
                 )
-            self._num_splits_processed += 1
+            self._num_bound += 1
         else:
             raise Exception("Multiple calls not allowed")
-
-        return list(args[1:])
 
     @property
     def target_type_str(self) -> str:
@@ -178,46 +187,41 @@ class KnownLenOpt(Option):
 
     @property
     def nargs(self) -> int:
-        return self.type_converter.num_required_args.min
+        if self.type_converter.num_required_args.min == -1:
+            return -1
+        else:
+            return self.type_converter.num_required_args.min + 1
 
     @property
-    def final_triggers(self) -> Set[str]:
-        return self._adjust_triggers(self.triggers)
+    def final_trigger_mappings(self) -> Dict[str, Option]:
+        return {x: self for x in self._adjust_triggers(self.triggers)}
 
     @property
     def final_trigger_help(self) -> str:
-        return f"{', '.join(self.final_triggers)}"
+        return f"{', '.join(self.final_trigger_mappings.keys())}"
 
     def _process_args(self, args: Sequence[str]) -> None:
         """Process the arguments and store in value."""
-        if self._num_splits_processed == 0 or self.multiple:
+        if self._num_bound == 0 or self.multiple:
             self.type_converter.bind(args)
-            self._num_splits_processed += 1
+            self._num_bound += 1
         else:
             raise Exception("Multiple calls not allowed")
 
-    def process_split(self, args: Sequence[str]) -> List[str]:
+    def bind(self, args: Sequence[str]) -> None:
         """Implement of general argument processing."""
-        if len(args) == 0:
-            raise TooFewInputsError("Expected at least one argument, got none.")
+        if self.nargs != -1 and len(args) != self.nargs:
+            raise OptionError(
+                f"Incorrect number of arguments. Expected {self.nargs} "
+                f"but got {len(args)}."
+            )
 
-        if args[0] not in self.final_triggers:
+        if args[0] not in self.final_trigger_mappings:
             raise UnexpectedTriggerError(
                 f"Option {args[0]} not registered as a trigger."
             )
 
-        if self.nargs == -1:
-            # take all arguments
-            self._process_args(args[1:])
-            return []
-
-        if len(args) - 1 < self.nargs:
-            raise TooFewInputsError(
-                f"Expected {self.nargs} arguments but got {len(args) - 1}"
-            )
-
-        self._process_args(args[1 : (self.nargs + 1)])
-        return list(args[(self.nargs + 1) :])
+        self._process_args(args[1:])
 
     @property
     def target_type_str(self) -> str:
@@ -265,28 +269,21 @@ class KnownLenArg(Argument):
 
     def _process_args(self, args: Sequence[str]) -> None:
         """Process the arguments and store in value."""
-        if self._num_splits_processed == 0:
+        if self._num_bound == 0:
             self.type_converter.bind(args)
-            self._num_splits_processed += 1
+            self._num_bound += 1
         else:
             raise Exception("Multiple calls not allowed")
 
-    def process_split(self, args: Sequence[str]) -> List[str]:
+    def bind(self, args: Sequence[str]) -> None:
         """Implement of general argument processing."""
-        if len(args) == 0:
-            raise TooFewInputsError("Expected at least one argument, got none.")
-
-        if self.nargs == -1:
-            # take all arguments
-            self._process_args(args)
-            return []
-
-        if len(args) < self.nargs:
-            raise TooFewInputsError(
-                f"Expected {self.nargs} arguments but got {len(args)}"
+        if self.nargs != -1 and len(args) != self.nargs:
+            raise ArgumentError(
+                f"Incorrect number of arguments. Expected {self.nargs} "
+                f"but got {len(args)}."
             )
-        self._process_args(args[: self.nargs])
-        return list(args[self.nargs :])
+
+        self._process_args(args)
 
     @property
     def target_type_str(self) -> str:

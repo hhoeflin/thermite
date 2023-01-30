@@ -114,7 +114,7 @@ def process_parameter(
                     triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                     multiple=False,
                 )
-            except ValueError:
+            except TypeError:
                 # see if this could be done using a class option group
                 if inspect.isclass(annot_to_use):
                     res = process_class_to_param_group(
@@ -123,7 +123,8 @@ def process_parameter(
                     )
                     res.name = param.name
                     return res
-
+                else:
+                    raise
     elif param.kind == inspect.Parameter.VAR_KEYWORD:
         # not yet a solution; should allow to pass any option
         raise NotImplementedError("VAR_KEYWORDS not yet supported")

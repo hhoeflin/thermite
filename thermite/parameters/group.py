@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
@@ -8,10 +8,10 @@ from thermite.exceptions import (
     DuplicatedTriggerError,
     UnexpectedReturnTypeError,
     UnexpectedTriggerError,
-    UnprocessedArgumentError,
     UnspecifiedObjError,
 )
 from thermite.help import OptionGroupHelp
+from thermite.utils import split_args_by_nargs
 
 from .base import Argument, Option, Parameter
 
@@ -26,7 +26,7 @@ class ParameterGroup:
     posargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
     varposargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
     kwargs: Dict[str, Union[Parameter, "ParameterGroup"]] = field(factory=dict)
-    _num_splits_processed: int = field(default=0, init=False)
+    _num_bound: int = field(default=0, init=False)
     _prefix: str = ""
     _name: str = ""
     default_value: Any = field(default=...)
@@ -77,27 +77,31 @@ class ParameterGroup:
         else:
             return self.name
 
-    def process_split(self, input_args: Sequence[str]) -> List[str]:
+    def bind_split(self, input_args: Sequence[str]) -> Sequence[str]:
         if len(input_args) == 0:
             return []
 
         if input_args[0].startswith("-"):
-            all_opts = self.cli_opts
-            opts_by_trigger = map_trigger_to_opts(all_opts)
+            opts_by_trigger = self.final_trigger_mappings
             if input_args[0] in opts_by_trigger:
-                self._num_splits_processed += 1
-                return opts_by_trigger[input_args[0]].process_split(input_args)
+                self._num_bound += 1
+                opt = opts_by_trigger[input_args[0]]
+                args_use, args_remain = split_args_by_nargs(input_args, opt.nargs)
+                opt.bind(args_use)
+                return args_remain
             else:
                 raise UnexpectedTriggerError(f"No option with trigger {input_args[0]}")
 
         else:
             for argument in self.cli_args:
                 if argument.unset:
-                    return argument.process_split(input_args)
+                    args_use, args_remain = split_args_by_nargs(
+                        input_args, argument.nargs
+                    )
+                    argument.bind(args_use)
+                    return args_remain
 
-            raise UnprocessedArgumentError(
-                f"No unset argument for {' '.join(input_args)}"
-            )
+        return input_args
 
     @property
     def args_values(self) -> Tuple[Any, ...]:
@@ -136,11 +140,18 @@ class ParameterGroup:
         return posargs_opts + varposarg_opts + kwargs_opts
 
     @property
-    def final_triggers(self) -> Set[str]:
-        all_triggers: Set[str] = set()
+    def final_trigger_mappings(self) -> Dict[str, Option]:
+        all_trigger_mappings: Dict[str, Option] = {}
         for opt in self.cli_opts:
-            all_triggers.update(opt.final_triggers)
-        return all_triggers
+            for trigger, trigger_opt in opt.final_trigger_mappings.items():
+                if trigger in all_trigger_mappings:
+                    raise DuplicatedTriggerError(
+                        f"Trigger {trigger} is in options {trigger_opt} "
+                        f"and {all_trigger_mappings[trigger]}"
+                    )
+                else:
+                    all_trigger_mappings[trigger] = trigger_opt
+        return all_trigger_mappings
 
     def help_opts_only(self) -> OptionGroupHelp:
         cli_opts = self.cli_opts
@@ -154,19 +165,3 @@ class ParameterGroup:
             gen_opts=[x.help() for x in cli_opts_single],
             opt_groups=[x.help_opts_only() for x in cli_opts_group],
         )
-
-
-def map_trigger_to_opts(
-    opts: List[Union[Option, ParameterGroup]]
-) -> Dict[str, Union[Option, ParameterGroup]]:
-    res: Dict[str, Union[Option, ParameterGroup]] = {}
-    for opt in opts:
-        final_triggers = opt.final_triggers
-        for trigger in final_triggers:
-            if trigger in res:
-                raise DuplicatedTriggerError(
-                    f"Trigger {trigger} in options {opt} and {res[trigger]}"
-                )
-            else:
-                res[trigger] = opt
-    return res

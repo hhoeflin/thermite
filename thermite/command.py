@@ -6,14 +6,14 @@ from attrs import mutable
 
 from thermite.help import CommandHelp
 
-from .exceptions import NothingProcessedError, UnprocessedArgumentError
+from .exceptions import UnprocessedArgumentError
 from .parameters import (
     ParameterGroup,
     process_class_to_param_group,
     process_function_to_param_group,
 )
 from .preprocessing import split_and_expand
-from .type_converters import ComplexTypeConverterFactory
+from .type_converters import CLIArgConverterStore
 
 
 def extract_subcommands(return_type: Any) -> Dict[str, Any]:
@@ -28,16 +28,12 @@ class Command:
     param_group: ParameterGroup
     subcommand_objs: Dict[str, Any]
 
-    _complex_factory: ClassVar[
-        ComplexTypeConverterFactory
-    ] = ComplexTypeConverterFactory()
+    _store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(add_defaults=True)
 
     @classmethod
     def _from_function(cls, func: Callable):
 
-        param_group = process_function_to_param_group(
-            func, complex_factory=cls._complex_factory
-        )
+        param_group = process_function_to_param_group(func, store=cls._store)
         return cls(
             param_group=param_group,
             subcommand_objs={},
@@ -45,9 +41,7 @@ class Command:
 
     @classmethod
     def _from_class(cls, klass: Type):
-        param_group = process_class_to_param_group(
-            klass, complex_factory=cls._complex_factory
-        )
+        param_group = process_class_to_param_group(klass, store=cls._store)
 
         return cls(
             param_group=param_group,
@@ -63,16 +57,13 @@ class Command:
         else:
             raise NotImplementedError()
 
-    def process_multiple(self, args: Sequence[str]) -> Any:
+    def bind_split(self, args: Sequence[str]) -> Sequence[str]:
         input_args_deque = split_and_expand(args)
 
         while len(input_args_deque) > 0:
             input_args = input_args_deque.popleft()
-            try:
-                args_return = self.param_group.process_split(input_args)
-            except NothingProcessedError:
-                # there are arguments left that the param_group can't handle
-                # search through the subcommand_objs
+            args_return = self.param_group.bind_split(input_args)
+            if len(args_return) == len(input_args):
                 if input_args[0] in self.subcommand_objs:
                     # get a subcommand, hand all remaining arguments to it
                     input_args_deque.appendleft(input_args[1:])
@@ -87,10 +78,8 @@ class Command:
                     raise UnprocessedArgumentError(
                         f"Argument {args} could not be processed"
                     )
-            if len(args_return) == len(input_args):
-                raise Exception("Input args have same length as return args")
             if len(args_return) > 0:
-                input_args_deque.appendleft(args_return)
+                input_args_deque.appendleft(list(args_return))
         return self.param_group.value
 
     @property
