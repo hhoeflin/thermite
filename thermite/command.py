@@ -57,7 +57,7 @@ class Command:
         else:
             raise NotImplementedError()
 
-    def bind_split(self, args: Sequence[str]) -> Sequence[str]:
+    def process(self, args: Sequence[str]) -> Any:
         input_args_deque = split_and_expand(args)
 
         while len(input_args_deque) > 0:
@@ -73,7 +73,7 @@ class Command:
                     res_obj = self.param_group.value
 
                     subcommand = self.from_obj(getattr(res_obj, input_args[0]))
-                    return subcommand.process_multiple(remaining_input_args)
+                    return subcommand.process(remaining_input_args)
                 else:
                     raise UnprocessedArgumentError(
                         f"Argument {args} could not be processed"

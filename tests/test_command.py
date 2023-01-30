@@ -133,11 +133,11 @@ class TestCommandFromFunction:
 
         if process_exc is not None:
             with pytest.raises(process_exc):
-                command.bind_split(input_args)
+                command.process(input_args)
                 assert command.param_group.args_values == output_args
                 assert command.param_group.kwargs_values == output_kwargs
         else:
-            command.bind_split(input_args)
+            command.process(input_args)
             assert command.param_group.args_values == output_args
             assert command.param_group.kwargs_values == output_kwargs
 
