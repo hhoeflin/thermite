@@ -77,7 +77,7 @@ class ParameterGroup:
         else:
             return self.name
 
-    def bind_split(self, input_args: Sequence[str]) -> Sequence[str]:
+    def bind(self, input_args: Sequence[str]) -> Optional[Sequence[str]]:
         if len(input_args) == 0:
             return []
 
@@ -87,8 +87,19 @@ class ParameterGroup:
                 self._num_bound += 1
                 opt = opts_by_trigger[input_args[0]]
                 args_use, args_remain = split_args_by_nargs(input_args, opt.nargs)
-                opt.bind(args_use)
-                return args_remain
+                bind_res = opt.bind(args_use)
+
+                # put together return; bind_res of None has special meaning
+                if len(args_remain) == 0:
+                    if bind_res is None:
+                        return None
+                    else:
+                        return bind_res
+                else:
+                    if bind_res is None:
+                        return args_remain
+                    else:
+                        return bind_res + args_remain
             else:
                 raise UnexpectedTriggerError(f"No option with trigger {input_args[0]}")
 

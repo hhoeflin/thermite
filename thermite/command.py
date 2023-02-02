@@ -6,6 +6,7 @@ from attrs import mutable
 
 from thermite.help import CommandHelp
 
+from .exceptions import UnprocessedArgumentError
 from .parameters import (
     ParameterGroup,
     process_class_to_param_group,
@@ -60,18 +61,16 @@ class Command:
         else:
             raise NotImplementedError()
 
-    def bind_split(self, args: Sequence[str]) -> List[str]:
+    def bind(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)
         while len(input_args_deque) > 0:
             input_args = input_args_deque.popleft()
-            args_return = self.param_group.bind_split(input_args)
-            if len(args_return) == len(input_args):
-                # we are finished
+            args_return = self.param_group.bind(input_args)
+            if args_return is not None:
                 input_args_deque.appendleft(list(args_return))
-                return undeque(input_args_deque)
-            if len(args_return) > 0:
-                # push the remaining args back and do another round
-                input_args_deque.appendleft(list(args_return))
+                if len(args_return) == len(input_args):
+                    # we are finished
+                    return undeque(input_args_deque)
         return []
 
     def subcommand(self, name: str) -> "Command":
@@ -120,9 +119,14 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
     # Note how to do eagery callbacks?
     # how to do lazy callbacks?
     while len(input_args) > 0:
-        input_args = cmd.bind_split(input_args)
+        input_args = cmd.bind(input_args)
         if len(input_args) > 0:
-            cmd = cmd.subcommand(input_args[0])
+            try:
+                cmd = cmd.subcommand(input_args[0])
+            except UnknownCommandError:
+                raise UnprocessedArgumentError(
+                    f"Arguments {input_args} could not be processed"
+                )
             input_args = input_args[1:]
         else:
             return cmd.param_group.value
