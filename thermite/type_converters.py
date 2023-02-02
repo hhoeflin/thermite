@@ -61,40 +61,7 @@ class CLIArgConverterBase(ABC):
         ...
 
     @abstractmethod
-    def bind(self, args: Sequence[str]):
-        ...
-
-    @property
-    def is_bound(self) -> bool:
-        return self.num_bound > 0
-
-    @property
-    def num_bound(self) -> int:
-        return len(self.bound_args)
-
-    @property
-    @abstractmethod
-    def bound_args(self) -> List[str]:
-        ...
-
-    @property
-    def value(self) -> Any:
-        if self.is_bound:
-            return self.convert(*self.bound_args)
-        else:
-            raise NoBoundArgsError()
-
-    @abstractmethod
-    def convert(self, *args: str) -> Any:
-        ...
-
-    @abstractmethod
-    def reset_bind(self) -> None:
-        ...
-
-    @property
-    @abstractmethod
-    def supports_bind_append(self) -> bool:
+    def convert(self, args: Sequence[str]) -> Any:
         ...
 
 
@@ -129,31 +96,7 @@ class BasicCLIArgConverter(CLIArgConverterSimple):
     def target_type(self) -> Type:
         return self._target_type
 
-    def bind(self, args: Sequence[str]):
-        if self._bound_arg is not None:
-            raise RebindingError()
-        else:
-            if len(args) < 1:
-                raise TooFewArgsError()
-            elif len(args) > 1:
-                raise TooManyArgsError()
-            self._bound_arg = args[0]
-
-    def reset_bind(self) -> None:
-        self._bound_arg = None
-
-    @property
-    def supports_bind_append(self) -> bool:
-        return False
-
-    @property
-    def bound_args(self) -> List[str]:
-        if self._bound_arg is None:
-            return []
-        else:
-            return [self._bound_arg]
-
-    def convert(self, *args: str) -> Any:
+    def convert(self, args: Sequence[str]) -> Any:
         return self._target_type(*args)
 
 
@@ -197,7 +140,7 @@ class LiteralCLIArgConverter(BasicCLIArgConverter):
                 "when converted to string."
             )
 
-    def convert(self, *args: str) -> Any:
+    def convert(self, args: Sequence[str]) -> Any:
         if len(args) > 1:
             raise TooManyArgsError()
         elif len(args) == 0:
@@ -218,7 +161,7 @@ class EnumCLIArgConverter(BasicCLIArgConverter):
             raise TypeError(f"{str(self._target_type)} is not an Enum")
         self._args_mapper = {e.name: e for e in self._target_type}
 
-    def convert(self, *args: str) -> Any:
+    def convert(self, args: Sequence[str]) -> Any:
         if len(args) > 1:
             raise TooManyArgsError()
         elif len(args) == 0:
@@ -236,7 +179,7 @@ class BoolCLIArgConverter(BasicCLIArgConverter):
         if self._target_type != bool:
             raise TypeError(f"{str(self._target_type)} is not a boolean")
 
-    def convert(self, *args: str) -> Any:
+    def convert(self, args: Sequence[str]) -> Any:
         if len(args) > 1:
             raise TooManyArgsError()
         elif len(args) == 0:
@@ -342,35 +285,14 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
     def target_type(self) -> Type:
         return self._target_type
 
-    def bind(self, args: Sequence[str]):
-        if len(self._bound_args) > 0:
-            raise RebindingError("A Union type can only be bound once")
-        else:
-            if len(args) < self.num_required_args.min:
-                raise TooFewArgsError()
-            elif len(args) > self.num_required_args.max:
-                raise TooManyArgsError()
-            self._bound_args = list(args)
-
-    def reset_bind(self) -> None:
-        self._bound_args = []
-
-    @property
-    def supports_bind_append(self) -> bool:
-        return False
-
-    @property
-    def bound_args(self) -> List[str]:
-        return self._bound_args
-
-    def convert(self, *args: str) -> Any:
+    def convert(self, args: Sequence[str]) -> Any:
         if len(args) > self.num_required_args.max:
             raise TooManyArgsError()
         elif len(args) < self.num_required_args.min:
             raise TooFewArgsError()
         for converter in self._converters:
             try:
-                return converter.convert(*args)
+                return converter.convert(args)
             except Exception:
                 pass
         raise ValueError(f"No fitting type found in union for {args}")
@@ -408,28 +330,7 @@ class ListCLIArgConverter(CLIArgConverterCompound):
     def target_type(self) -> Type:
         return self._target_type
 
-    def bind(self, args: Sequence[str]):
-        # here we can bind an arbitrary amount, but only
-        # multiples of the required arguments
-        req_group_args = self._inner_converter.num_required_args.min
-        num_groups = len(args) // req_group_args
-        num_args = num_groups * req_group_args
-        if len(args) != num_args:
-            raise TooManyArgsError()
-        self._bound_args.extend(args[0:num_args])
-
-    def reset_bind(self) -> None:
-        self._bound_args = []
-
-    @property
-    def supports_bind_append(self) -> bool:
-        return True
-
-    @property
-    def bound_args(self) -> List[str]:
-        return self._bound_args
-
-    def convert(self, *args: str) -> Any:
+    def convert(self, args: Sequence[str]) -> Any:
         req_group_args = self._inner_converter.num_required_args.min
         num_groups = len(args) // req_group_args
         num_args = num_groups * req_group_args
@@ -438,12 +339,8 @@ class ListCLIArgConverter(CLIArgConverterCompound):
         out = []
         for i in range(0, num_args, req_group_args):
             group_args = args[i : (i + req_group_args)]
-            out.append(self._inner_converter.convert(*group_args))
+            out.append(self._inner_converter.convert(group_args))
         return out
-
-    @property
-    def value(self) -> Any:
-        return self.convert(*self.bound_args)
 
 
 @mutable(slots=False)
@@ -480,28 +377,7 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
     def target_type(self) -> Type:
         return self._target_type
 
-    def bind(self, args: Sequence[str]):
-        if len(self._bound_args) > 0:
-            raise RebindingError("A Union type can only be bound once")
-        else:
-            if len(args) < self.num_required_args.min:
-                raise TooFewArgsError()
-            if len(args) > self.num_required_args.max:
-                raise TooManyArgsError()
-            self._bound_args = list(args)
-
-    def reset_bind(self) -> None:
-        self._bound_args = []
-
-    @property
-    def supports_bind_append(self) -> bool:
-        return False
-
-    @property
-    def bound_args(self) -> List[str]:
-        return self._bound_args
-
-    def convert(self, *args: str) -> Any:
+    def convert(self, args: Sequence[str]) -> Any:
         if len(args) > self.num_required_args.max:
             raise TooManyArgsError()
         elif len(args) < self.num_required_args.min:
@@ -511,5 +387,5 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
         for converter in self._tuple_converters:
             tuple_args = args[pos : (pos + converter.num_required_args.min)]
             pos = pos + converter.num_required_args.min
-            tuple_out.append(converter.convert(*tuple_args))
+            tuple_out.append(converter.convert(tuple_args))
         return tuple(tuple_out)

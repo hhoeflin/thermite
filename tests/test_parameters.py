@@ -195,7 +195,7 @@ class TestKnownLenOpt:
             descr="Path option",
             triggers=("--path", "-p"),
             default_value=[],
-            type_converter=ListCLIArgConverter(List[Path], store=store),
+            type_converter=PathCLIArgConverter(Path),
             target_type_str="Path",
             multiple=True,
         )

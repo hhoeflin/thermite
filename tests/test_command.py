@@ -133,11 +133,13 @@ class TestCommandFromFunction:
 
         if process_exc is not None:
             with pytest.raises(process_exc):
-                command.process(input_args)
+                res = command.bind_split(input_args)
+                if len(res) > 0:
+                    raise UnprocessedArgumentError()
                 assert command.param_group.args_values == output_args
                 assert command.param_group.kwargs_values == output_kwargs
         else:
-            command.process(input_args)
+            command.bind_split(input_args)
             assert command.param_group.args_values == output_args
             assert command.param_group.kwargs_values == output_kwargs
 

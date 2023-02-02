@@ -62,7 +62,6 @@ class Command:
 
     def bind_split(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)
-
         while len(input_args_deque) > 0:
             input_args = input_args_deque.popleft()
             args_return = self.param_group.bind_split(input_args)
@@ -99,7 +98,7 @@ class Command:
         opt_group.descr = None
 
         # last we need the subcommands and their descriptions
-        subcommands = {key: "" for key, obj in self.subcommand_objs.items()}
+        subcommands = {key: obj.descr for key, obj in self.subcommand_objs.items()}
 
         return CommandHelp(
             descr=self.param_group.descr,
@@ -120,3 +119,10 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
     ...
     # Note how to do eagery callbacks?
     # how to do lazy callbacks?
+    while len(input_args) > 0:
+        input_args = cmd.bind_split(input_args)
+        if len(input_args) > 0:
+            cmd = cmd.subcommand(input_args[0])
+            input_args = input_args[1:]
+        else:
+            return cmd.param_group.value

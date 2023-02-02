@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Union
 
 from attrs import field, mutable
 
@@ -23,6 +23,15 @@ class ArgumentError(Exception):
     ...
 
 
+@mutable
+class BoundArgs:
+    converter: CLIArgConverterBase
+    args: Sequence[str]
+
+    def convert(self) -> Any:
+        return self.converter.convert(self.args)
+
+
 @mutable(slots=False, kw_only=True)
 class Parameter(ABC):
     """Base class for Parameters."""
@@ -30,7 +39,6 @@ class Parameter(ABC):
     descr: Optional[str] = field(default=None)
     name: str
     default_value: Any
-    _num_bound: int = field(default=0, init=False)
 
     @property
     @abstractmethod
@@ -43,8 +51,9 @@ class Parameter(ABC):
         ...
 
     @property
+    @abstractmethod
     def unset(self) -> bool:
-        return self._num_bound == 0
+        ...
 
     @property
     @abstractmethod
@@ -114,6 +123,10 @@ class BoolOption(Option):
         return 1
 
     @property
+    def unset(self) -> bool:
+        return self._value == ...
+
+    @property
     def final_pos_triggers(self) -> Set[str]:
         return self._adjust_triggers(self.pos_triggers)
 
@@ -141,7 +154,7 @@ class BoolOption(Option):
                 f"but got {len(args)}."
             )
 
-        if self._num_bound == 0 or self.multiple:
+        if self.unset or self.multiple:
             # check that the argument given matches the triggers
             if args[0] in self.final_pos_triggers:
                 self._value = True
@@ -151,7 +164,6 @@ class BoolOption(Option):
                 raise UnexpectedTriggerError(
                     f"Option {args[0]} not registered as a trigger."
                 )
-            self._num_bound += 1
         else:
             raise Exception("Multiple calls not allowed")
 
@@ -179,6 +191,7 @@ class KnownLenOpt(Option):
     triggers: Set[str] = field(converter=set)
     _target_type_str: str
     type_converter: CLIArgConverterBase
+    _bound_args_list: List[BoundArgs] = field(init=False, factory=list)
 
     def __attrs_post_init__(self):
         # if multiple is true, it has to be a list
@@ -193,6 +206,10 @@ class KnownLenOpt(Option):
             return self.type_converter.num_required_args.min + 1
 
     @property
+    def unset(self) -> bool:
+        return len(self._bound_args_list) == 0
+
+    @property
     def final_trigger_mappings(self) -> Dict[str, Option]:
         return {x: self for x in self._adjust_triggers(self.triggers)}
 
@@ -202,9 +219,8 @@ class KnownLenOpt(Option):
 
     def _process_args(self, args: Sequence[str]) -> None:
         """Process the arguments and store in value."""
-        if self._num_bound == 0 or self.multiple:
-            self.type_converter.bind(args)
-            self._num_bound += 1
+        if self.unset or self.multiple:
+            self._bound_args_list.append(BoundArgs(self.type_converter, args))
         else:
             raise Exception("Multiple calls not allowed")
 
@@ -241,7 +257,10 @@ class KnownLenOpt(Option):
             else:
                 return self.default_value
         else:
-            return self.type_converter.value
+            if self.multiple:
+                return [x.convert() for x in self._bound_args_list]
+            else:
+                return self._bound_args_list[0].convert()
 
 
 @mutable(slots=False, kw_only=True)
@@ -262,16 +281,20 @@ class KnownLenArg(Argument):
     _target_type_str: str
     callback: Optional[Callable[[Any], Any]] = field(default=None)
     type_converter: CLIArgConverterBase
+    _bound_args: Optional[BoundArgs] = None
 
     @property
     def nargs(self) -> int:
         return self.type_converter.num_required_args.max
 
+    @property
+    def unset(self) -> bool:
+        return self._bound_args is None
+
     def _process_args(self, args: Sequence[str]) -> None:
         """Process the arguments and store in value."""
-        if self._num_bound == 0:
-            self.type_converter.bind(args)
-            self._num_bound += 1
+        if self.unset:
+            self._bound_args = BoundArgs(self.type_converter, args)
         else:
             raise Exception("Multiple calls not allowed")
 
@@ -303,4 +326,4 @@ class KnownLenArg(Argument):
             else:
                 return self.default_value
         else:
-            return self.type_converter.value
+            return self._bound_args.convert()  # type: ignore

@@ -55,10 +55,8 @@ def test_store(
     converter = store.get_converter(target_type)
     assert converter.num_required_args.max == nargs
     if expected is not None:
-        converter.bind(args)
-        res = converter.value
+        res = converter.convert(args)
         assert res == expected
     else:
         with pytest.raises(Exception):
-            converter.bind(args)
-            converter.value
+            converter.convert(args)
