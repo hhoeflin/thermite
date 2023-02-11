@@ -1,6 +1,7 @@
 import inspect
 from collections import defaultdict
 from typing import (
+    Any,
     Callable,
     Dict,
     List,
@@ -18,7 +19,7 @@ from thermite.type_converters import CLIArgConverterStore
 from thermite.utils import clify_argname
 
 from .base import BoolOption, KnownLenArg, KnownLenOpt, Parameter
-from .group import ParameterGroup
+from .group import NoOpGroup, ParameterGroup
 
 
 def process_parameter(
@@ -165,11 +166,11 @@ def process_function_to_param_group(
             store=store,
         )
         if param.kind == inspect.Parameter.POSITIONAL_ONLY:
-            param_group.posargs.append(cli_param)
+            param_group._posargs.append(cli_param)
         elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-            param_group.varposargs.append(cli_param)
+            param_group._varposargs.append(cli_param)
         else:
-            param_group.kwargs[param.name] = cli_param
+            param_group._kwargs[param.name] = cli_param
 
     return param_group
 
@@ -210,10 +211,28 @@ def process_class_to_param_group(
                 store=store,
             )
             if param.kind == inspect.Parameter.POSITIONAL_ONLY:
-                param_group.posargs.append(cli_param)
+                param_group._posargs.append(cli_param)
             elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-                param_group.varposargs.append(cli_param)
+                param_group._varposargs.append(cli_param)
             else:
-                param_group.kwargs[param.name] = cli_param
+                param_group._kwargs[param.name] = cli_param
+
+    return param_group
+
+
+def process_instance_to_param_group(obj: Any) -> ParameterGroup:
+    # get the documentation
+    klass_doc = inspect.getdoc(obj.__class__)
+
+    if klass_doc is not None:
+        klass_doc_parsed = parse(klass_doc)
+        short_description = klass_doc_parsed.short_description
+    else:
+        short_description = None
+
+    # the signature has self at the beginning that we need to ignore
+    param_group = ParameterGroup(
+        descr=short_description, obj=obj, expected_ret_type=obj.__class__
+    )
 
     return param_group

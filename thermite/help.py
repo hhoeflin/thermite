@@ -41,20 +41,21 @@ def opt_help_list_to_table(opts: List[OptHelp]) -> Optional[Table]:
         return opt_grid
 
 
-def arg_help_list_to_table(args: List[ArgHelp]) -> Optional[Table]:
+def arg_help_list_to_table(args: List[ArgHelp]) -> Optional[Panel]:
     if len(args) == 0:
         return None
     else:
-        opt_grid = Table(expand=True, show_header=False, box=box.SIMPLE, leading=1)
-        opt_grid.add_column("Name")
-        opt_grid.add_column("Type")
-        opt_grid.add_column("Default")
-        opt_grid.add_column("Description")
+        arg_grid = Table(expand=True, show_header=False, box=box.SIMPLE, leading=1)
+        arg_grid.add_column("Name")
+        arg_grid.add_column("Type")
+        arg_grid.add_column("Default")
+        arg_grid.add_column("Description")
 
         for arg in args:
-            opt_grid.add_row(arg.name, arg.type_descr, arg.default, arg.descr)
+            arg_grid.add_row(arg.name, arg.type_descr, arg.default, arg.descr)
 
-        return opt_grid
+        outpanel = Panel(arg_grid, title="Arguments", expand=True, title_align="left")
+        return outpanel
 
 
 @mutable(slots=False, kw_only=True)

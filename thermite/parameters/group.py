@@ -22,10 +22,10 @@ EllipsisType = type(...)
 class ParameterGroup:
     descr: Optional[str] = None
     obj: Any = None
-    expected_ret_type: object = None
-    posargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
-    varposargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
-    kwargs: Dict[str, Union[Parameter, "ParameterGroup"]] = field(factory=dict)
+    _expected_ret_type: object = None
+    _posargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
+    _varposargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
+    _kwargs: Dict[str, Union[Parameter, "ParameterGroup"]] = field(factory=dict)
     _num_bound: int = field(default=0, init=False)
     _prefix: str = ""
     _name: str = ""
@@ -36,9 +36,9 @@ class ParameterGroup:
             raise UnspecifiedObjError()
         if inspect.isfunction(self.obj):
             res_obj = self.obj(*self.args_values, **self.kwargs_values)
-            if not is_bearable(res_obj, self.expected_ret_type):
+            if not is_bearable(res_obj, self._expected_ret_type):
                 raise UnexpectedReturnTypeError(
-                    f"Expected return type {str(self.expected_ret_type)} "
+                    f"Expected return type {str(self._expected_ret_type)} "
                     f"but got {str(type(res_obj))}"
                 )
         elif inspect.isclass(self.obj):
@@ -116,15 +116,15 @@ class ParameterGroup:
 
     @property
     def args_values(self) -> Tuple[Any, ...]:
-        res = [x.value for x in self.posargs]
-        for arg in self.varposargs:
+        res = [x.value for x in self._posargs]
+        for arg in self._varposargs:
             res.extend(arg.value)
 
         return tuple(res)
 
     @property
     def kwargs_values(self) -> Dict[str, Any]:
-        return {key: arg.value for key, arg in self.kwargs.items()}
+        return {key: arg.value for key, arg in self._kwargs.items()}
 
     @property
     def value(self) -> Any:
@@ -132,21 +132,21 @@ class ParameterGroup:
 
     @property
     def cli_args(self) -> List[Argument]:
-        posargs_args = [x for x in self.posargs if isinstance(x, Argument)]
-        varposarg_args = [x for x in self.varposargs if isinstance(x, Argument)]
-        kwargs_args = [x for x in self.kwargs.values() if isinstance(x, Argument)]
+        posargs_args = [x for x in self._posargs if isinstance(x, Argument)]
+        varposarg_args = [x for x in self._varposargs if isinstance(x, Argument)]
+        kwargs_args = [x for x in self._kwargs.values() if isinstance(x, Argument)]
         return posargs_args + varposarg_args + kwargs_args
 
     @property
     def cli_opts(self) -> List[Union[Option, "ParameterGroup"]]:
         posargs_opts = [
-            x for x in self.posargs if isinstance(x, (Option, ParameterGroup))
+            x for x in self._posargs if isinstance(x, (Option, ParameterGroup))
         ]
         varposarg_opts = [
-            x for x in self.varposargs if isinstance(x, (Option, ParameterGroup))
+            x for x in self._varposargs if isinstance(x, (Option, ParameterGroup))
         ]
         kwargs_opts = [
-            x for x in self.kwargs.values() if isinstance(x, (Option, ParameterGroup))
+            x for x in self._kwargs.values() if isinstance(x, (Option, ParameterGroup))
         ]
         return posargs_opts + varposarg_opts + kwargs_opts
 
@@ -176,3 +176,9 @@ class ParameterGroup:
             gen_opts=[x.help() for x in cli_opts_single],
             opt_groups=[x.help_opts_only() for x in cli_opts_group],
         )
+
+
+@mutable(slots=False, kw_only=True)
+class NoOpGroup:
+    descr: Optional[str] = None
+    obj: Any = None

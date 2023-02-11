@@ -1,6 +1,8 @@
 import inspect
+import sys
+import types
 from inspect import Signature
-from typing import Any, Callable, ClassVar, Dict, List, Sequence, Type
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence, Type
 
 from attrs import mutable
 
@@ -27,37 +29,82 @@ class UnknownCommandError(Exception):
     ...
 
 
+@mutable()
+class Callback:
+    callback: Callable[["Command"], None]
+    triggers: List[str]
+
+
+@mutable
+class Subcommand:
+    descr: str
+    attr_name: str
+
+
+# Supported combinations of subcommand-types and return-values
+# Property:
+# - class is supported
+# - instance is supported (wrap the creation into a function
+#       with 0 arguments and correctly annotated return value
+# - function is supported
+
+# method: (class or instance)
+# - Class is not supported
+# - instance is supported
+# - function is not supported
+#
+# function: same as method
+
+
 @mutable(slots=False)
 class Command:
+    name: str
     param_group: ParameterGroup
-    subcommand_objs: Dict[str, Any]
+    subcommands: Dict[str, str]
+    prev_cmd: Optional["Command"] = None
 
-    _store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(add_defaults=True)
+    global_callbacks: ClassVar[List[Callback]] = []
+    store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(add_defaults=True)
 
     @classmethod
-    def _from_function(cls, func: Callable):
+    def _from_function(cls, func: Callable, name: str):
 
-        param_group = process_function_to_param_group(func, store=cls._store)
+        param_group = process_function_to_param_group(func, store=cls.store)
         return cls(
+            name=name,
             param_group=param_group,
-            subcommand_objs={},
+            subcommands={},
         )
 
     @classmethod
-    def _from_class(cls, klass: Type):
-        param_group = process_class_to_param_group(klass, store=cls._store)
+    def _from_instance(cls, obj: Any, name: str):
+        # an instance would only provide additional subcommands, without
+        # any options
+        ...
+
+    @classmethod
+    def _from_class(cls, klass: Type, name: str):
+        param_group = process_class_to_param_group(klass, store=cls.store)
+        # TODO: Need to add subcommand_objs
+        # all classmethods and object-methods will be subcommands
+        methods_dict = [
+            attr
+            for attr in dir(klass)
+            if callable(getattr(klass, attr)) and attr.startswith("__") is False
+        ]
 
         return cls(
+            name=name,
             param_group=param_group,
-            subcommand_objs={},
+            subcommands={},
         )
 
     @classmethod
-    def from_obj(cls, obj: Any):
+    def from_obj(cls, obj: Any, name: str):
         if inspect.isfunction(obj):
-            return cls._from_function(func=obj)
+            return cls._from_function(func=obj, name=name)
         elif inspect.isclass(obj):
-            return cls._from_class(obj)
+            return cls._from_class(obj, name=name)
         else:
             raise NotImplementedError()
 
@@ -74,9 +121,20 @@ class Command:
         return []
 
     def subcommand(self, name: str) -> "Command":
-        if name in self.subcommand_objs:
+        if name in self.subcommands.items():
             res_obj = self.param_group.value
-            subcommand = self.from_obj(getattr(res_obj, name))
+
+            # we restrict subcommands to only work with instance objects
+            # for now
+            if type(res_obj) == types.FunctionType:
+                raise Exception("Functions not supported as basis for subcommands")
+
+            attr_name = self.subcommands[name]
+            if attr_name != "":
+                subcommand = self.from_obj(getattr(res_obj, attr_name), name=name)
+            else:
+                subcommand = self.from_obj(getattr(res_obj, "__call__"), name=name)
+            subcommand.prev_cmd = self
 
             return subcommand
         else:
@@ -97,7 +155,7 @@ class Command:
         opt_group.descr = None
 
         # last we need the subcommands and their descriptions
-        subcommands = {key: obj.descr for key, obj in self.subcommand_objs.items()}
+        subcommands = {key: obj.descr for key, obj in self.subcommands.items()}
 
         return CommandHelp(
             descr=self.param_group.descr,
@@ -116,7 +174,7 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
     followed up with further processing in subcommands as needed.
     """
     ...
-    # Note how to do eagery callbacks?
+    # Note how to do eager callbacks?
     # how to do lazy callbacks?
     while len(input_args) > 0:
         input_args = cmd.bind(input_args)
@@ -130,3 +188,19 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
             input_args = input_args[1:]
         else:
             return cmd.param_group.value
+
+
+def run(
+    obj: Any,
+    store: Optional[CLIArgConverterStore] = None,
+    callbacks: Optional[List[Callback]] = None,
+) -> Any:
+    if store is not None:
+        Command.store = store
+
+    if callbacks is not None:
+        Command.global_callbacks = callbacks
+    cmd = Command.from_obj(obj, name=sys.argv[0])
+    # get all input arguments
+    input_args = sys.argv[1:]
+    return process_all_args(input_args=input_args, cmd=cmd)
