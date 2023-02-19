@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
+from immutabledict import immutabledict
 
 from thermite.exceptions import (
     DuplicatedTriggerError,
@@ -23,13 +24,14 @@ class ParameterGroup:
     descr: Optional[str] = None
     obj: Any = None
     _expected_ret_type: object = None
-    _posargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
-    _varposargs: List[Union[Parameter, "ParameterGroup"]] = field(factory=list)
-    _kwargs: Dict[str, Union[Parameter, "ParameterGroup"]] = field(factory=dict)
+    _posargs: Tuple[Union[Parameter, "ParameterGroup"], ...]
+    _varposargs: Tuple[Union[Parameter, "ParameterGroup"], ...]
+    _kwargs: immutabledict[str, Union[Parameter, "ParameterGroup"]]
     _num_bound: int = field(default=0, init=False)
     _prefix: str = ""
     _name: str = ""
     default_value: Any = field(default=...)
+    child_prefix_omit_name: bool = True
 
     def _exec_obj(self) -> Any:
         if self.obj is None:
@@ -47,6 +49,17 @@ class ParameterGroup:
             raise NotImplementedError()
 
         return res_obj
+
+    @property
+    def child_prefix(self) -> str:
+        prefixes = []
+        if self.prefix != "":
+            prefixes.append(self.prefix)
+
+        if not self.child_prefix_omit_name and self.name != "":
+            prefixes.append(self.name)
+
+        return "-".join(prefixes)
 
     def _set_prefix_children(self):
         for opt in self.cli_opts:
@@ -69,13 +82,6 @@ class ParameterGroup:
     def name(self, name: str):
         self._name = name
         self._set_prefix_children()
-
-    @property
-    def child_prefix(self) -> str:
-        if self.prefix != "":
-            return f"{self.prefix}-{self.name}"
-        else:
-            return self.name
 
     def bind(self, input_args: Sequence[str]) -> Optional[Sequence[str]]:
         if len(input_args) == 0:

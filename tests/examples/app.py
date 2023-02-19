@@ -37,7 +37,7 @@ class NestedClass:
 
     @classmethod
     def clsmethod(cls, c: bool):
-        pass
+        del c
 
     @property
     def value(self):
@@ -99,7 +99,7 @@ class Subcommands:
             raise Exception("Unknonwn 'which'")
 
 
-def hierarchical_function(
+def subcommands_function(
     integer: int, string: str, int_or_string: Union[int, str]
 ) -> Subcommands:
     """
@@ -140,5 +140,5 @@ class Aggregation:
     """A collection of functions and classes."""
 
     single_level_function = single_level_function
-    hierarchical_function = hierarchical_function
+    subcommands_function = subcommands_function
     Subcommands = Subcommands

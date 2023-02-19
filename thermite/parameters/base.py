@@ -4,7 +4,6 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Union
 from attrs import field, mutable
 
 from thermite.exceptions import (
-    TooFewInputsError,
     UnexpectedTriggerError,
     UnspecifiedArgumentError,
     UnspecifiedOptionError,
@@ -102,6 +101,7 @@ class Option(Parameter):
 
     def help(self) -> OptHelp:
         default_str = str(self.default_value) if self.default_value != ... else ""
+
         return OptHelp(
             triggers=self.final_trigger_help,
             type_descr=self.target_type_str,

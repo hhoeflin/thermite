@@ -1,15 +1,23 @@
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import pytest
-from examples.app import NestedClass, func_kw_or_pos, func_pos_only, func_with_nesting
 from rich.console import Console
 
-from thermite.command import Command
+from thermite.command import Command, help_callback, run
 from thermite.exceptions import (
     UnexpectedTriggerError,
     UnprocessedArgumentError,
     UnspecifiedArgumentError,
     UnspecifiedOptionError,
+)
+
+from .examples.app import (
+    NestedClass,
+    Subcommands,
+    func_kw_or_pos,
+    func_pos_only,
+    func_with_nesting,
+    subcommands_function,
 )
 
 
@@ -74,7 +82,7 @@ from thermite.exceptions import (
         ),
     ],
 )
-def test_command_single_step(
+def test_command_bind(
     obj: Union[Callable, Type],
     input_args: Sequence[str],
     process_exc: Optional[Type],
@@ -96,7 +104,62 @@ def test_command_single_step(
         assert command.param_group.kwargs_values == output_kwargs
 
 
+@pytest.mark.parametrize(
+    "obj,input_args,process_exc,subcommands",
+    [
+        (
+            func_kw_or_pos,
+            ("--a", "1", "--b", "test"),
+            None,
+            [],
+        ),
+        (
+            Subcommands,
+            ("--integer", "1", "--string", "test"),
+            None,
+            ["show-integer", "show-string", "show"],
+        ),
+        (
+            subcommands_function,
+            ("--integer", "1", "--string", "test", "--int-or-string", "2"),
+            None,
+            ["show-integer", "show-string", "show"],
+        ),
+    ],
+)
+def test_command_subcommands(
+    obj: Union[Callable, Type],
+    input_args: Sequence[str],
+    process_exc: Optional[Type],
+    subcommands: List[str],
+):
+    command = Command.from_obj(obj=obj, name="test")
+
+    if process_exc is not None:
+        with pytest.raises(process_exc):
+            res = command.bind(input_args)
+            if len(res) > 0:
+                raise UnprocessedArgumentError()
+            assert set(command.subcommands.keys()) == set(subcommands)
+    else:
+        command.bind(input_args)
+        assert set(command.subcommands.keys()) == set(subcommands)
+
+
 if __name__ == "__main__":
-    command = Command.from_obj(ExampleNested, name="ExampleNested")
-    console = Console()
-    console.print(command.help())
+    from .examples.app import Aggregation, subcommands_function
+
+    # run(
+    #    subcommands_function,
+    #    name="With subcommand",
+    #    input_args=["--help"],
+    #    callbacks=[help_callback],
+    # )
+    run(
+        Aggregation,
+        name="Aggregation",
+        input_args=["--help"],
+        callbacks=[help_callback],
+        add_rich_exc_handler=False,
+        add_thermite_exc_handler=False,
+    )

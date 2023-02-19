@@ -15,6 +15,8 @@ dependencies = [
     "attrs",
     "beartype",
     "docstring-parser",
+    "immutabledict",
+    "rich"
 ]
 
 
@@ -31,6 +33,7 @@ dev = [
 
 [tool.pyright]
 include=['thermite']
+exclude=['.conda_env']
 typeCheckingMode='off'
 
 [tool.black]

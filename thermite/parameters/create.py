@@ -1,5 +1,4 @@
 import inspect
-from collections import defaultdict
 from typing import (
     Any,
     Callable,
@@ -7,19 +6,22 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Tuple,
     Type,
     Union,
     get_args,
     get_origin,
 )
 
-from docstring_parser import Docstring, parse
+from docstring_parser import parse
+from immutabledict import immutabledict
 
+from thermite.help import extract_descriptions
 from thermite.type_converters import CLIArgConverterStore
-from thermite.utils import clify_argname
+from thermite.utils import clean_type_str, clify_argname
 
 from .base import BoolOption, KnownLenArg, KnownLenOpt, Parameter
-from .group import NoOpGroup, ParameterGroup
+from .group import ParameterGroup
 
 
 def process_parameter(
@@ -43,8 +45,6 @@ def process_parameter(
     else:
         default_val = param.default
 
-    # extract docs for this parameter
-
     # check if is should be an argument or an option
     if param.kind == inspect.Parameter.POSITIONAL_ONLY:
         conv = store.get_converter(annot_to_use)
@@ -54,7 +54,7 @@ def process_parameter(
             descr=description,
             default_value=default_val,
             type_converter=conv,
-            target_type_str=str(annot_to_use),
+            target_type_str=clean_type_str(annot_to_use),
             callback=None,
         )
     elif param.kind == inspect.Parameter.VAR_POSITIONAL:
@@ -68,7 +68,7 @@ def process_parameter(
             descr=description,
             default_value=default_val,
             type_converter=conv,
-            target_type_str=str(annot_to_use),
+            target_type_str=clean_type_str(annot_to_use),
             callback=None,
         )
     elif param.kind in (
@@ -99,7 +99,7 @@ def process_parameter(
                 descr=description,
                 default_value=default_val,
                 type_converter=conv,
-                target_type_str=str(annot_to_use),
+                target_type_str=clean_type_str(annot_to_use),
                 triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                 multiple=True,
             )
@@ -110,7 +110,7 @@ def process_parameter(
                     name=param.name,
                     descr=description,
                     default_value=default_val,
-                    target_type_str=str(annot_to_use),
+                    target_type_str=clean_type_str(annot_to_use),
                     type_converter=conv,
                     triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
                     multiple=False,
@@ -121,6 +121,8 @@ def process_parameter(
                     res = process_class_to_param_group(
                         klass=annot_to_use,
                         store=store,
+                        name=param.name,
+                        child_prefix_omit_name=False,
                     )
                     res.name = param.name
                     return res
@@ -133,94 +135,104 @@ def process_parameter(
         raise Exception(f"Unknown value for kind: {param.kind}")
 
 
-def doc_to_dict(doc_parsed: Docstring) -> Dict[str, Optional[str]]:
-    res: Dict[str, Optional[str]] = defaultdict(lambda: None)
-    res.update({x.arg_name: x.description for x in doc_parsed.params})
-    return res
+def parse_func_signature(
+    params: Sequence[inspect.Parameter],
+    args_doc_dict: Dict[str, Optional[str]],
+    omit_first: bool,
+    store: CLIArgConverterStore,
+) -> Tuple[
+    Tuple[Union[Parameter, ParameterGroup], ...],
+    Tuple[Union[Parameter, ParameterGroup], ...],
+    immutabledict[str, Union[Parameter, ParameterGroup]],
+]:
+
+    posargs = []
+    varposargs = []
+    kwargs = {}
+    for count, param in enumerate(params):
+        if omit_first and count == 0:
+            # this is self
+            continue
+        else:
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                continue
+            else:
+                cli_param = process_parameter(
+                    param=param,
+                    description=args_doc_dict[param.name],
+                    store=store,
+                )
+                if param.kind == inspect.Parameter.POSITIONAL_ONLY:
+                    posargs.append(cli_param)
+                elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                    varposargs.append(cli_param)
+                else:
+                    kwargs[param.name] = cli_param
+
+    return (tuple(posargs), tuple(varposargs), immutabledict(kwargs))
 
 
 def process_function_to_param_group(
-    func: Callable, store: CLIArgConverterStore
+    func: Callable, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
 ) -> ParameterGroup:
+    descriptions = extract_descriptions(func)
+
     func_sig = inspect.signature(func)
 
-    # preprocess the documentation
-    func_doc = inspect.getdoc(func)
-    if func_doc is not None:
-        doc_parsed = parse(func_doc)
-        short_description = doc_parsed.short_description
-        args_doc_dict = doc_to_dict(doc_parsed)
-    else:
-        short_description = None
-        args_doc_dict = defaultdict(lambda: None)
-
+    posargs, varposargs, kwargs = parse_func_signature(
+        list(func_sig.parameters.values()),
+        args_doc_dict=descriptions.args_doc_dict,
+        omit_first=False,
+        store=store,
+    )
     param_group = ParameterGroup(
-        descr=short_description,
+        descr=descriptions.short_descr,
         obj=func,
         expected_ret_type=func_sig.return_annotation,
+        name=name,
+        child_prefix_omit_name=child_prefix_omit_name,
+        posargs=posargs,
+        varposargs=varposargs,
+        kwargs=kwargs,
     )
-    for param in func_sig.parameters.values():
-        cli_param = process_parameter(
-            param=param,
-            description=args_doc_dict[param.name],
-            store=store,
-        )
-        if param.kind == inspect.Parameter.POSITIONAL_ONLY:
-            param_group._posargs.append(cli_param)
-        elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-            param_group._varposargs.append(cli_param)
-        else:
-            param_group._kwargs[param.name] = cli_param
 
     return param_group
 
 
 def process_class_to_param_group(
-    klass: Type,
-    store: CLIArgConverterStore,
+    klass: Type, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
 ) -> ParameterGroup:
-    init_sig = inspect.signature(klass.__init__)
+    descriptions = extract_descriptions(klass)
+    if klass.__init__ != object.__init__:
+        init_sig = inspect.signature(klass.__init__)
 
-    # get the documentation
-    klass_doc = inspect.getdoc(klass)
-    init_doc = inspect.getdoc(klass.__init__)
-    if klass_doc is not None:
-        klass_doc_parsed = parse(klass_doc)
-        short_description = klass_doc_parsed.short_description
+        # the signature has self at the beginning that we need to ignore
+        posargs, varposargs, kwargs = parse_func_signature(
+            list(init_sig.parameters.values()),
+            args_doc_dict=descriptions.args_doc_dict,
+            omit_first=True,
+            store=store,
+        )
+        param_group = ParameterGroup(
+            descr=descriptions.short_descr,
+            obj=klass,
+            expected_ret_type=klass,
+            name=name,
+            child_prefix_omit_name=child_prefix_omit_name,
+            posargs=posargs,
+            varposargs=varposargs,
+            kwargs=kwargs,
+        )
+        return param_group
     else:
-        short_description = None
-
-    if init_doc is not None:
-        init_doc_parsed = parse(init_doc)
-        args_doc_dict = doc_to_dict(init_doc_parsed)
-    else:
-        args_doc_dict = defaultdict(lambda: None)
-
-    # the signature has self at the beginning that we need to ignore
-    param_group = ParameterGroup(
-        descr=short_description, obj=klass, expected_ret_type=klass
-    )
-    for count, param in enumerate(init_sig.parameters.values()):
-        if count == 0:
-            # this is self
-            continue
-        else:
-            cli_param = process_parameter(
-                param=param,
-                description=args_doc_dict[param.name],
-                store=store,
-            )
-            if param.kind == inspect.Parameter.POSITIONAL_ONLY:
-                param_group._posargs.append(cli_param)
-            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-                param_group._varposargs.append(cli_param)
-            else:
-                param_group._kwargs[param.name] = cli_param
-
-    return param_group
+        return process_instance_to_param_group(
+            klass(), name=name, child_prefix_omit_name=child_prefix_omit_name
+        )
 
 
-def process_instance_to_param_group(obj: Any) -> ParameterGroup:
+def process_instance_to_param_group(
+    obj: Any, name: str, child_prefix_omit_name: bool
+) -> ParameterGroup:
     # get the documentation
     klass_doc = inspect.getdoc(obj.__class__)
 
@@ -232,7 +244,13 @@ def process_instance_to_param_group(obj: Any) -> ParameterGroup:
 
     # the signature has self at the beginning that we need to ignore
     param_group = ParameterGroup(
-        descr=short_description, obj=obj, expected_ret_type=obj.__class__
+        descr=short_description,
+        obj=obj,
+        expected_ret_type=obj.__class__,
+        name=name,
+        child_prefix_omit_name=child_prefix_omit_name,
+        posargs=tuple(),
+        varposargs=tuple(),
+        kwargs=immutabledict(),
     )
-
     return param_group
