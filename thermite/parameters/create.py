@@ -124,7 +124,7 @@ def process_parameter(
                         name=param.name,
                         child_prefix_omit_name=False,
                     )
-                    res.name = param.name
+                    res.default_value = default_val
                     return res
                 else:
                     raise
@@ -141,9 +141,9 @@ def parse_func_signature(
     omit_first: bool,
     store: CLIArgConverterStore,
 ) -> Tuple[
-    Tuple[Union[Parameter, ParameterGroup], ...],
-    Tuple[Union[Parameter, ParameterGroup], ...],
-    immutabledict[str, Union[Parameter, ParameterGroup]],
+    List[Union[Parameter, ParameterGroup]],
+    List[Union[Parameter, ParameterGroup]],
+    Dict[str, Union[Parameter, ParameterGroup]],
 ]:
 
     posargs = []
@@ -169,7 +169,7 @@ def parse_func_signature(
                 else:
                     kwargs[param.name] = cli_param
 
-    return (tuple(posargs), tuple(varposargs), immutabledict(kwargs))
+    return (posargs, varposargs, kwargs)
 
 
 def process_function_to_param_group(

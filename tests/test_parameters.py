@@ -12,8 +12,12 @@ from thermite.parameters import (
     Option,
     OptionError,
     Parameter,
+    ParameterGroup,
+    process_class_to_param_group,
 )
-from thermite.type_converters import ListCLIArgConverter, PathCLIArgConverter
+from thermite.type_converters import CLIArgConverterStore, PathCLIArgConverter
+
+from .examples.app import NestedClass
 
 
 @mutable
@@ -219,3 +223,36 @@ class TestKnownLenArgs:
         path_arg = self.path_arg()
         path_arg.bind(["/a/b"])
         assert path_arg.value == Path("/a/b")
+
+
+class TestParamGroup:
+    def param_group(self) -> ParameterGroup:
+        res = process_class_to_param_group(
+            NestedClass,
+            store=CLIArgConverterStore(),
+            name="test",
+            child_prefix_omit_name=True,
+        )
+        res.default_value = NestedClass(a=1)
+        return res
+
+    def test_default(self):
+        param_group = self.param_group()
+        assert param_group.value == NestedClass(a=1)
+
+    def test_single_incomplete_bind(self):
+        param_group = self.param_group()
+        param_group.bind(["--b", "test2"])
+        with pytest.raises(UnspecifiedOptionError):
+            param_group.value
+
+    def test_single_complete_bind(self):
+        param_group = self.param_group()
+        param_group.bind(["--a", "2"])
+        assert param_group.value == NestedClass(a=2)
+
+    def test_both_bind(self):
+        param_group = self.param_group()
+        param_group.bind(["--a", "2"])
+        param_group.bind(["--b", "test2"])
+        assert param_group.value == NestedClass(a=2, b="test2")

@@ -3,13 +3,13 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
-from immutabledict import immutabledict
 
 from thermite.exceptions import (
     DuplicatedTriggerError,
     UnexpectedReturnTypeError,
     UnexpectedTriggerError,
     UnspecifiedObjError,
+    UnspecifiedOptionError,
 )
 from thermite.help import OptionGroupHelp
 from thermite.utils import split_args_by_nargs
@@ -24,14 +24,13 @@ class ParameterGroup:
     descr: Optional[str] = None
     obj: Any = None
     _expected_ret_type: object = None
-    _posargs: Tuple[Union[Parameter, "ParameterGroup"], ...]
-    _varposargs: Tuple[Union[Parameter, "ParameterGroup"], ...]
-    _kwargs: immutabledict[str, Union[Parameter, "ParameterGroup"]]
-    _num_bound: int = field(default=0, init=False)
+    _posargs: List[Union[Parameter, "ParameterGroup"]]
+    _varposargs: List[Union[Parameter, "ParameterGroup"]]
+    _kwargs: Dict[str, Union[Parameter, "ParameterGroup"]]
     _prefix: str = ""
     _name: str = ""
     default_value: Any = field(default=...)
-    child_prefix_omit_name: bool = True
+    _child_prefix_omit_name: bool = True
 
     def _exec_obj(self) -> Any:
         if self.obj is None:
@@ -50,8 +49,16 @@ class ParameterGroup:
 
         return res_obj
 
+    def __attrs_post_init__(self):
+        self._set_prefix_children()
+
     @property
     def child_prefix(self) -> str:
+        # note that child prefix depends on
+        # - prefix
+        # - name
+        # - child_prefix_omit_name
+        # If any of these changes, it should be reset
         prefixes = []
         if self.prefix != "":
             prefixes.append(self.prefix)
@@ -83,6 +90,15 @@ class ParameterGroup:
         self._name = name
         self._set_prefix_children()
 
+    @property
+    def child_prefix_omit_name(self) -> bool:
+        return self._child_prefix_omit_name
+
+    @child_prefix_omit_name.setter
+    def child_prefix_omit_name(self, child_prefix_omit_name: bool):
+        self._child_prefix_omit_name = child_prefix_omit_name
+        self._set_prefix_children()
+
     def bind(self, input_args: Sequence[str]) -> Optional[Sequence[str]]:
         if len(input_args) == 0:
             return []
@@ -90,7 +106,6 @@ class ParameterGroup:
         if input_args[0].startswith("-"):
             opts_by_trigger = self.final_trigger_mappings
             if input_args[0] in opts_by_trigger:
-                self._num_bound += 1
                 opt = opts_by_trigger[input_args[0]]
                 args_use, args_remain = split_args_by_nargs(input_args, opt.nargs)
                 bind_res = opt.bind(args_use)
@@ -133,8 +148,28 @@ class ParameterGroup:
         return {key: arg.value for key, arg in self._kwargs.items()}
 
     @property
+    def unset(self) -> bool:
+        for arg in self.cli_args:
+            if not arg.unset:
+                return False
+
+        for opt in self.cli_opts:
+            if not opt.unset:
+                return False
+
+        return True
+
+    @property
     def value(self) -> Any:
-        return self._exec_obj()
+        if self.unset:
+            if self.default_value == ...:
+                raise UnspecifiedOptionError(
+                    f"Paramter {self.name} was not specified and has no default"
+                )
+            else:
+                return self.default_value
+        else:
+            return self._exec_obj()
 
     @property
     def cli_args(self) -> List[Argument]:
@@ -182,9 +217,3 @@ class ParameterGroup:
             gen_opts=[x.help() for x in cli_opts_single],
             opt_groups=[x.help_opts_only() for x in cli_opts_group],
         )
-
-
-@mutable(slots=False, kw_only=True)
-class NoOpGroup:
-    descr: Optional[str] = None
-    obj: Any = None

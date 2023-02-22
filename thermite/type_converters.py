@@ -198,7 +198,7 @@ class CLIArgConverterStore:
         Tuple[Union[Type[CLIArgConverterSimple], Type[CLIArgConverterCompound]], float]
     ]
 
-    def __init__(self, add_defaults: bool = False):
+    def __init__(self, add_defaults: bool = True):
         self._converters_with_priority = []
         if add_defaults:
             self.add_default_converters()
