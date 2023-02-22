@@ -29,6 +29,7 @@ class ParameterGroup:
     _kwargs: Dict[str, Union[Parameter, "ParameterGroup"]]
     _prefix: str = ""
     _name: str = ""
+    _num_bound: int = field(default=0, init=False)
     default_value: Any = field(default=...)
     _child_prefix_omit_name: bool = True
 
@@ -106,6 +107,7 @@ class ParameterGroup:
         if input_args[0].startswith("-"):
             opts_by_trigger = self.final_trigger_mappings
             if input_args[0] in opts_by_trigger:
+                self._num_bound += 1
                 opt = opts_by_trigger[input_args[0]]
                 bind_res = opt.bind(input_args)
 
@@ -116,6 +118,7 @@ class ParameterGroup:
         else:
             for argument in self.cli_args:
                 if argument.unset:
+                    self._num_bound += 1
                     args_use, args_remain = split_args_by_nargs(
                         input_args, argument.nargs
                     )
@@ -138,15 +141,7 @@ class ParameterGroup:
 
     @property
     def unset(self) -> bool:
-        for arg in self.cli_args:
-            if not arg.unset:
-                return False
-
-        for opt in self.cli_opts:
-            if not opt.unset:
-                return False
-
-        return True
+        return self._num_bound == 0
 
     @property
     def value(self) -> Any:
