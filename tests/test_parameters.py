@@ -32,21 +32,29 @@ def test_protocol_checks_option_correct():
 
 class TestBoolOption:
     @pytest.mark.parametrize(
-        "pos_triggers,neg_triggers,prefix,args,val_exp",
+        "pos_triggers,neg_triggers,prefix,args,return_args,val_exp",
         [
-            (("-y", "--yes"), ("-n", "--no"), "", ["-y"], True),
-            (("-y", "--yes"), ("-n", "--no"), "", ["--yes"], True),
-            (("-y", "--yes"), ("-n", "--no"), "", ["-n"], False),
-            (("-y", "--yes"), ("-n", "--no"), "", ["--no"], False),
-            (("-y", "--yes"), ("-n", "--no"), "", ["-y", "other"], OptionError),
-            (("-y", "--yes"), ("-n", "--no"), "", ["-a"], UnexpectedTriggerError),
-            (("-y", "--yes"), ("-n", "--no"), "group", ["-y"], UnexpectedTriggerError),
-            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-yes"], True),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-y"], None, True),
+            (("-y", "--yes"), ("-n", "--no"), "", ["--yes"], None, True),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-n"], None, False),
+            (("-y", "--yes"), ("-n", "--no"), "", ["--no"], None, False),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-y", "other"], ["other"], True),
+            (("-y", "--yes"), ("-n", "--no"), "", ["-a"], None, UnexpectedTriggerError),
+            (
+                ("-y", "--yes"),
+                ("-n", "--no"),
+                "group",
+                ["-y"],
+                None,
+                UnexpectedTriggerError,
+            ),
+            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-yes"], None, True),
             (
                 ("-y", "--yes"),
                 ("-n", "--no"),
                 "group",
                 ["-n"],
+                None,
                 UnexpectedTriggerError,
             ),
             (
@@ -54,13 +62,23 @@ class TestBoolOption:
                 ("-n", "--no"),
                 "group",
                 ["--yes"],
+                None,
                 UnexpectedTriggerError,
             ),
-            (("-y", "--yes"), ("-n", "--no"), "group", ["-n"], UnexpectedTriggerError),
-            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-no"], False),
+            (
+                ("-y", "--yes"),
+                ("-n", "--no"),
+                "group",
+                ["-n"],
+                None,
+                UnexpectedTriggerError,
+            ),
+            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-no"], None, False),
         ],
     )
-    def test_normal(self, pos_triggers, neg_triggers, prefix, args, val_exp):
+    def test_normal(
+        self, pos_triggers, neg_triggers, prefix, args, return_args, val_exp
+    ):
         """Test that BoolOption works as expected."""
 
         opt = BoolOption(
@@ -76,8 +94,9 @@ class TestBoolOption:
             with pytest.raises(val_exp):
                 opt.bind(args)
         else:
-            opt.bind(args)
+            bind_return = opt.bind(args)
             assert opt.value == val_exp
+            assert bind_return == return_args
 
     def test_unused(self):
         opt = BoolOption(
@@ -139,27 +158,46 @@ class TestBoolOption:
 
 class TestKnownLenOpt:
     @pytest.mark.parametrize(
-        "triggers,prefix,args,val_exp",
+        "triggers,prefix,args,return_args, val_exp",
         [
-            (("--path", "-p"), "", ["--path", "/a/b"], Path("/a/b")),
-            (("--path", "-p"), "", ["-p", "/a/b"], Path("/a/b")),
-            (("--path", "-p"), "", ["--path", "/a/b", "other"], OptionError),
-            (("--path", "-p"), "", ["-a", "/a/b"], UnexpectedTriggerError),
-            (("--path", "-p"), "", ["--foo", "/a/b"], UnexpectedTriggerError),
-            (("--path", "-p"), "group", ["--group-path", "/a/b"], Path("/a/b")),
-            (("--path", "-p"), "group", ["--path", "/a/b"], UnexpectedTriggerError),
-            (("--path", "-p"), "group", ["-p", "/a/b"], UnexpectedTriggerError),
+            (("--path", "-p"), "", ["--path", "/a/b"], None, Path("/a/b")),
+            (("--path", "-p"), "", ["-p", "/a/b"], None, Path("/a/b")),
+            (
+                ("--path", "-p"),
+                "",
+                ["--path", "/a/b", "other"],
+                ["other"],
+                Path("/a/b"),
+            ),
+            (("--path", "-p"), "", ["-a", "/a/b"], None, UnexpectedTriggerError),
+            (("--path", "-p"), "", ["--foo", "/a/b"], None, UnexpectedTriggerError),
+            (("--path", "-p"), "group", ["--group-path", "/a/b"], None, Path("/a/b")),
+            (
+                ("--path", "-p"),
+                "group",
+                ["--path", "/a/b"],
+                None,
+                UnexpectedTriggerError,
+            ),
+            (("--path", "-p"), "group", ["-p", "/a/b"], None, UnexpectedTriggerError),
             (
                 ("--path", "-p"),
                 "group",
                 ["--group-path", "/a/b", "other"],
-                OptionError,
+                ["other"],
+                Path("/a/b"),
             ),
-            (("--path", "-p"), "group", ["-a", "/a/b"], UnexpectedTriggerError),
-            (("--path", "-p"), "group", ["--foo", "/a/b"], UnexpectedTriggerError),
+            (("--path", "-p"), "group", ["-a", "/a/b"], None, UnexpectedTriggerError),
+            (
+                ("--path", "-p"),
+                "group",
+                ["--foo", "/a/b"],
+                None,
+                UnexpectedTriggerError,
+            ),
         ],
     )
-    def test_normal(self, triggers, prefix, args, val_exp):
+    def test_normal(self, triggers, prefix, args, return_args, val_exp):
         """Test that BoolOption works as expected."""
 
         opt = KnownLenOpt(
@@ -177,8 +215,9 @@ class TestKnownLenOpt:
             with pytest.raises(val_exp):
                 opt.bind(args)
         else:
-            opt.bind(args)
+            bind_return = opt.bind(args)
             assert opt.value == val_exp
+            assert bind_return == return_args
 
     def test_too_few_args(self):
         opt = KnownLenOpt(

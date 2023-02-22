@@ -45,7 +45,7 @@ class Parameter(ABC):
         ...
 
     @abstractmethod
-    def bind(self, args: Sequence[str]) -> None:
+    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
         """Get a list of arguments and returns any unused ones."""
         ...
 
@@ -145,15 +145,11 @@ class BoolOption(Option):
             f"{', '.join(self.final_neg_triggers)}"
         )
 
-    def bind(self, args: Sequence[str]) -> None:
+    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
         """Process the arguments."""
+        if len(args) == 0:
+            raise OptionError("no trigger found")
         # check that we have at least one argument, the trigger
-        if self.nargs != -1 and len(args) != self.nargs:
-            raise OptionError(
-                f"Incorrect number of arguments. Expected {self.nargs} "
-                f"but got {len(args)}."
-            )
-
         if self.unset or self.multiple:
             # check that the argument given matches the triggers
             if args[0] in self.final_pos_triggers:
@@ -166,6 +162,11 @@ class BoolOption(Option):
                 )
         else:
             raise Exception("Multiple calls not allowed")
+
+        if self.nargs != -1 and len(args) != self.nargs:
+            return args[self.nargs :]
+        else:
+            return None
 
     @property
     def target_type_str(self) -> str:
@@ -224,20 +225,24 @@ class KnownLenOpt(Option):
         else:
             raise Exception("Multiple calls not allowed")
 
-    def bind(self, args: Sequence[str]) -> None:
+    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
         """Implement of general argument processing."""
-        if self.nargs != -1 and len(args) != self.nargs:
+        if self.nargs != -1 and len(args) < self.nargs:
             raise OptionError(
-                f"Incorrect number of arguments. Expected {self.nargs} "
-                f"but got {len(args)}."
+                "Not enough arguments found. Expected "
+                f"{self.nargs} but got {len(args)}."
             )
-
         if args[0] not in self.final_trigger_mappings:
             raise UnexpectedTriggerError(
                 f"Option {args[0]} not registered as a trigger."
             )
 
-        self._process_args(args[1:])
+        if self.nargs != -1 and len(args) != self.nargs:
+            self._process_args(args[1 : self.nargs])
+            return args[self.nargs :]
+        else:
+            self._process_args(args[1:])
+            return None
 
     @property
     def target_type_str(self) -> str:
@@ -298,15 +303,14 @@ class KnownLenArg(Argument):
         else:
             raise Exception("Multiple calls not allowed")
 
-    def bind(self, args: Sequence[str]) -> None:
+    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
         """Implement of general argument processing."""
         if self.nargs != -1 and len(args) != self.nargs:
-            raise ArgumentError(
-                f"Incorrect number of arguments. Expected {self.nargs} "
-                f"but got {len(args)}."
-            )
-
-        self._process_args(args)
+            self._process_args(args[: self.nargs])
+            return args[self.nargs :]
+        else:
+            self._process_args(args)
+            return None
 
     @property
     def target_type_str(self) -> str:

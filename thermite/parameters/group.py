@@ -107,20 +107,9 @@ class ParameterGroup:
             opts_by_trigger = self.final_trigger_mappings
             if input_args[0] in opts_by_trigger:
                 opt = opts_by_trigger[input_args[0]]
-                args_use, args_remain = split_args_by_nargs(input_args, opt.nargs)
-                bind_res = opt.bind(args_use)
+                bind_res = opt.bind(input_args)
 
-                # put together return; bind_res of None has special meaning
-                if len(args_remain) == 0:
-                    if bind_res is None:
-                        return None
-                    else:
-                        return bind_res
-                else:
-                    if bind_res is None:
-                        return args_remain
-                    else:
-                        return bind_res + args_remain
+                return bind_res
             else:
                 raise UnexpectedTriggerError(f"No option with trigger {input_args[0]}")
 
@@ -192,8 +181,8 @@ class ParameterGroup:
         return posargs_opts + varposarg_opts + kwargs_opts
 
     @property
-    def final_trigger_mappings(self) -> Dict[str, Option]:
-        all_trigger_mappings: Dict[str, Option] = {}
+    def final_trigger_mappings(self) -> Dict[str, Union[Option, "ParameterGroup"]]:
+        all_trigger_mappings: Dict[str, Union[Option, "ParameterGroup"]] = {}
         for opt in self.cli_opts:
             for trigger, trigger_opt in opt.final_trigger_mappings.items():
                 if trigger in all_trigger_mappings:
@@ -202,7 +191,7 @@ class ParameterGroup:
                         f"and {all_trigger_mappings[trigger]}"
                     )
                 else:
-                    all_trigger_mappings[trigger] = trigger_opt
+                    all_trigger_mappings[trigger] = opt
         return all_trigger_mappings
 
     def help_opts_only(self) -> OptionGroupHelp:
