@@ -18,7 +18,7 @@ from typing import (
 )
 
 from attrs import mutable
-from rich.console import Console, rich_cast
+from rich.console import Console
 
 from thermite.exceptions import RichExcHandler, thermite_exc_handler
 from thermite.help import CbHelp, CommandHelp, extract_descriptions
@@ -151,7 +151,7 @@ class Command:
         else:
             raise NotImplementedError()
 
-    def bind(self, args: Sequence[str]) -> List[str]:
+    def process(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)
 
         global_cb_map = self._global_callbacks_map()
@@ -169,8 +169,8 @@ class Command:
                 if args_return is not None:
                     input_args_deque.appendleft(list(args_return))
             else:
-                args_return = self.param_group.bind(input_args)
-                if args_return is not None:
+                args_return = self.param_group.process(input_args)
+                if len(args_return) > 0:
                     input_args_deque.appendleft(list(args_return))
                     if len(args_return) == len(input_args):
                         # we are finished

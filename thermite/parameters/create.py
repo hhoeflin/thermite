@@ -20,8 +20,38 @@ from thermite.help import extract_descriptions
 from thermite.type_converters import CLIArgConverterStore
 from thermite.utils import clean_type_str, clify_argname
 
-from .base import BoolOption, KnownLenArg, KnownLenOpt, Parameter
+from .base import Argument, Option, Parameter
 from .group import ParameterGroup
+from .processors import (
+    ConstantTriggerProcessor,
+    ConvertListTriggerProcessor,
+    ConvertOnceTriggerProcessor,
+    ConvertReplaceTriggerProcessor,
+)
+
+
+def bool_option(
+    name: str,
+    descr: str,
+    pos_triggers: Sequence[str],
+    neg_triggers: Sequence[str],
+    default_value: Any,
+    prefix: str = "",
+):
+    return Option(
+        name=name,
+        descr=descr,
+        default_value=default_value,
+        prefix=prefix,
+        processors=[
+            ConstantTriggerProcessor(
+                triggers=pos_triggers, type_str="Bool", constant=True
+            ),
+            ConstantTriggerProcessor(
+                triggers=neg_triggers, type_str="Bool", constant=False
+            ),
+        ],
+    )
 
 
 def process_parameter(
@@ -45,44 +75,37 @@ def process_parameter(
     else:
         default_val = param.default
 
-    # check if is should be an argument or an option
-    if param.kind == inspect.Parameter.POSITIONAL_ONLY:
-        conv = store.get_converter(annot_to_use)
-        # single argument
-        return KnownLenArg(
-            name=param.name,
-            descr=description,
-            default_value=default_val,
-            type_converter=conv,
-            target_type_str=clean_type_str(annot_to_use),
-            callback=None,
-        )
-    elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+    if param.kind == inspect.Parameter.VAR_POSITIONAL:
         # argument list
         # the converter needs to be changed; the type annotation is per item,
         # not for the whole list
         annot_to_use = List[annot_to_use]  # type: ignore
         conv = store.get_converter(annot_to_use)
-        return KnownLenArg(
+        return Option(
             name=param.name,
             descr=description,
             default_value=default_val,
-            type_converter=conv,
-            target_type_str=clean_type_str(annot_to_use),
-            callback=None,
+            processors=[
+                ConvertListTriggerProcessor(
+                    triggers=[f"--{clify_argname(param.name)}"],
+                    type_converter=conv,
+                    type_str=clean_type_str(annot_to_use),
+                )
+            ],
         )
     elif param.kind in (
         inspect.Parameter.POSITIONAL_OR_KEYWORD,
         inspect.Parameter.KEYWORD_ONLY,
+        inspect.Parameter.POSITIONAL_ONLY,
     ):
         if annot_to_use == bool:
             # need to use a bool-option
-            return BoolOption(
+            return bool_option(
                 name=param.name,
                 default_value=default_val,
-                descr=description,
-                pos_triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
-                neg_triggers=[f"--no-{clify_argname(param.name)}"],  # type: ignore
+                descr=description if description is not None else "",
+                pos_triggers=[f"--{clify_argname(param.name)}"],
+                neg_triggers=[f"--no-{clify_argname(param.name)}"],
             )
         elif get_origin(annot_to_use) in (List, Sequence):
             annot_args = get_args(annot_to_use)
@@ -94,26 +117,32 @@ def process_parameter(
                 raise TypeError(f"{str(annot_to_use)} has more than 1 argument.")
 
             conv = store.get_converter(inner_type)
-            return KnownLenOpt(
+            return Option(
                 name=param.name,
                 descr=description,
                 default_value=default_val,
-                type_converter=conv,
-                target_type_str=clean_type_str(annot_to_use),
-                triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
-                multiple=True,
+                processors=[
+                    ConvertListTriggerProcessor(
+                        triggers=[f"--{clify_argname(param.name)}"],
+                        type_converter=conv,
+                        type_str=clean_type_str(annot_to_use),
+                    )
+                ],
             )
         else:
             try:
                 conv = store.get_converter(annot_to_use)
-                return KnownLenOpt(
+                return Option(
                     name=param.name,
                     descr=description,
                     default_value=default_val,
-                    target_type_str=clean_type_str(annot_to_use),
-                    type_converter=conv,
-                    triggers=[f"--{clify_argname(param.name)}"],  # type: ignore
-                    multiple=False,
+                    processors=[
+                        ConvertReplaceTriggerProcessor(
+                            triggers=[f"--{clify_argname(param.name)}"],
+                            type_converter=conv,
+                            type_str=clean_type_str(annot_to_use),
+                        )
+                    ],
                 )
             except TypeError:
                 # see if this could be done using a class option group
@@ -249,8 +278,8 @@ def process_instance_to_param_group(
         expected_ret_type=obj.__class__,
         name=name,
         child_prefix_omit_name=child_prefix_omit_name,
-        posargs=tuple(),
-        varposargs=tuple(),
-        kwargs=immutabledict(),
+        posargs=list(),
+        varposargs=list(),
+        kwargs={},
     )
     return param_group

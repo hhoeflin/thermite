@@ -1,30 +1,36 @@
-from .base import (
-    Argument,
-    BoolOption,
-    KnownLenArg,
-    KnownLenOpt,
-    Option,
-    OptionError,
-    Parameter,
-)
+from .base import Argument, Option, OptionError, Parameter
 from .create import (
+    bool_option,
     process_class_to_param_group,
     process_function_to_param_group,
     process_instance_to_param_group,
     process_parameter,
 )
 from .group import ParameterGroup
+from .processors import (
+    ConstantTriggerProcessor,
+    ConvertListTriggerProcessor,
+    ConvertOnceTriggerProcessor,
+    ConvertReplaceTriggerProcessor,
+    ConvertTriggerProcessor,
+    TriggerProcessor,
+)
 
 __all__ = [
     "Argument",
-    "BoolOption",
-    "KnownLenArg",
-    "KnownLenOpt",
     "Option",
     "OptionError",
     "Parameter",
     "ParameterGroup",
     "process_parameter",
     "process_function_to_param_group",
+    "process_instance_to_param_group",
     "process_class_to_param_group",
+    "bool_option",
+    "ConstantTriggerProcessor",
+    "ConvertListTriggerProcessor",
+    "ConvertOnceTriggerProcessor",
+    "ConvertReplaceTriggerProcessor",
+    "ConvertTriggerProcessor",
+    "TriggerProcessor",
 ]

@@ -12,15 +12,20 @@ from rich.table import Table
 from rich.text import Text
 
 
-@mutable(slots=False, kw_only=True)
-class OptHelp:
+@mutable(kw_only=True)
+class ProcessorHelp:
     triggers: str
     type_descr: str
+
+
+@mutable(kw_only=True)
+class OptHelp:
+    processors: List[ProcessorHelp]
     default: str
     descr: str
 
 
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class ArgHelp:
     name: str
     type_descr: str
@@ -28,7 +33,7 @@ class ArgHelp:
     descr: str
 
 
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class CbHelp:
     triggers: str
     descr: str
@@ -51,12 +56,13 @@ def opt_help_list_to_table(opts: List[OptHelp]) -> Optional[Table]:
         opt_grid.add_column("Description")
 
         for opt in opts:
-            opt_grid.add_row(
-                Text(opt.triggers),
-                Text(opt.type_descr),
-                Text(opt.default),
-                Text(opt.descr),
-            )
+            for i, processor in enumerate(opt.processors):
+                opt_grid.add_row(
+                    Text(processor.triggers),
+                    Text(processor.type_descr),
+                    Text(opt.default) if i == 0 else "",
+                    Text(opt.descr) if i == 0 else "",
+                )
 
         return opt_grid
 
@@ -112,7 +118,7 @@ def arg_help_list_to_table(args: List[ArgHelp]) -> Optional[Panel]:
         return outpanel
 
 
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class OptionGroupHelp:
     name: Optional[str]
     descr: Optional[str]
@@ -170,7 +176,7 @@ def create_commands_panel(subcommands: Dict[str, Optional[str]]) -> Optional[Pan
         return Panel(cmd_grid, title="Commands", expand=True, title_align="left")
 
 
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class CommandHelp:
     descr: Optional[str]
     usage: str
@@ -205,7 +211,7 @@ class CommandHelp:
         return Group(*elements)
 
 
-@mutable()
+@mutable(kw_only=True)
 class Descriptions:
     short_descr: Optional[str]
     long_descr: Optional[str]

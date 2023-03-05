@@ -55,6 +55,10 @@ class CLIArgConverterBase(ABC):
     def num_required_args(self) -> NumReqArgs:
         ...
 
+    @abstractmethod
+    def num_requested_args(self, num_offered_args: int) -> int:
+        ...
+
     @property
     @abstractmethod
     def target_type(self) -> Type:
@@ -91,6 +95,11 @@ class BasicCLIArgConverter(CLIArgConverterSimple):
     @property
     def num_required_args(self) -> NumReqArgs:
         return NumReqArgs(1, 1)
+
+    def num_requested_args(self, num_offered_args: int) -> int:
+        if num_offered_args < 1:
+            raise TooFewArgsError("Require at least 1 argument")
+        return 1
 
     @property
     def target_type(self) -> Type:
@@ -281,6 +290,9 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
     def num_required_args(self) -> NumReqArgs:
         return self._num_required_args
 
+    def num_requested_args(self, num_offered_args: int) -> int:
+        return self._converters[0].num_requested_args(num_offered_args)
+
     @property
     def target_type(self) -> Type:
         return self._target_type
@@ -325,6 +337,12 @@ class ListCLIArgConverter(CLIArgConverterCompound):
     @property
     def num_required_args(self) -> NumReqArgs:
         return NumReqArgs(self._inner_converter.num_required_args.min, -1)
+
+    def num_requested_args(self, num_offered_args: int) -> int:
+        inner_num_args = self._inner_converter.num_required_args.min
+        if num_offered_args < inner_num_args:
+            raise TooFewArgsError(f"Require at least {inner_num_args} arguments")
+        return int(int(num_offered_args) / int(inner_num_args) * int(inner_num_args))
 
     @property
     def target_type(self) -> Type:
@@ -372,6 +390,13 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
         num_args = sum([x.num_required_args.min for x in self._tuple_converters])
 
         return NumReqArgs(num_args, num_args)
+
+    def num_requested_args(self, num_offered_args: int) -> int:
+        if num_offered_args < self.num_required_args.min:
+            raise TooFewArgsError(
+                "Require at least {self.num_requested_args.min} argument"
+            )
+        return self.num_required_args.min
 
     @property
     def target_type(self) -> Type:

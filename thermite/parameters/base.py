@@ -1,15 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Union
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 from attrs import field, mutable
+from exceptiongroup import ExceptionGroup
 
-from thermite.exceptions import (
-    UnexpectedTriggerError,
-    UnspecifiedArgumentError,
-    UnspecifiedOptionError,
-)
-from thermite.help import ArgHelp, OptHelp
+from thermite.exceptions import ParameterError, TriggerError
+from thermite.help import ArgHelp, OptHelp, ProcessorHelp
 from thermite.type_converters import CLIArgConverterBase
+
+from .processors import TriggerProcessor
 
 EllipsisType = type(...)
 
@@ -22,55 +21,64 @@ class ArgumentError(Exception):
     ...
 
 
-@mutable
-class BoundArgs:
-    converter: CLIArgConverterBase
-    args: Sequence[str]
-
-    def convert(self) -> Any:
-        return self.converter.convert(self.args)
+class TriggerUsedError(Exception):
+    ...
 
 
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class Parameter(ABC):
     """Base class for Parameters."""
 
     descr: Optional[str] = field(default=None)
     name: str
     default_value: Any
-
-    @property
-    @abstractmethod
-    def nargs(self) -> int:
-        ...
+    _value: Any = field(default=..., init=False)  # type: ignore
+    _exceptions: List[Exception] = field(factory=list, init=False)
 
     @abstractmethod
-    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
+    def process(self, args: Sequence[str]) -> Sequence[str]:
         """Get a list of arguments and returns any unused ones."""
         ...
 
     @property
-    @abstractmethod
     def unset(self) -> bool:
-        ...
+        return self._value == ... and len(self._exceptions) == 0
 
     @property
-    @abstractmethod
-    def target_type_str(self) -> str:
-        ...
-
-    @property
-    @abstractmethod
     def value(self) -> Any:
-        ...
+        if len(self._exceptions) > 0:
+            if len(self._exceptions) == 1:
+                raise self._exceptions[0]
+            else:
+                raise ExceptionGroup(
+                    f"Multiple errors in {self.__class__.__name__}",
+                    self._exceptions,
+                )
+        elif self._value != ...:
+            return self._value
+        else:
+            # unset
+            if self.default_value == ...:
+                raise ParameterError(
+                    f"Paramter {self.name} was not specified and has no default"
+                )
+            else:
+                return self.default_value
 
 
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class Option(Parameter):
     """Base class for Options."""
 
     _prefix: str = ""
-    multiple: bool = False
+    _processors: List[TriggerProcessor]
+
+    def __attrs_post_init__(self):
+        self._set_processor_prefix()
+
+    def _set_processor_prefix(self):
+        for processor in self.processors:
+            processor.prefix = self._prefix
 
     @property
     def prefix(self) -> str:
@@ -79,255 +87,90 @@ class Option(Parameter):
     @prefix.setter
     def prefix(self, prefix: str):
         self._prefix = prefix
+        self._set_processor_prefix()
 
     @property
-    @abstractmethod
-    def final_trigger_mappings(self) -> Dict[str, "Option"]:
-        ...
+    def processors(self) -> List[TriggerProcessor]:
+        return self._processors
 
     @property
-    @abstractmethod
-    def final_trigger_help(self) -> str:
-        ...
+    def _final_trigger_by_processor(self) -> Dict[str, TriggerProcessor]:
+        res = {}
+        for processor in self.processors:
+            res.update({trigger: processor for trigger in processor.triggers})
+        return res
 
-    def _adjust_triggers(self, triggers: Set[str]) -> Set[str]:
-        if self.prefix == "":
-            return set(triggers)
-        else:
-            filtered_triggers = filter(lambda x: x.startswith("--"), triggers)
-            return set(
-                [f"--{self.prefix}-{trigger[2:]}" for trigger in filtered_triggers]
-            )
+    @property
+    def final_triggers(self) -> Sequence[str]:
+        return list(self._final_trigger_by_processor.keys())
+
+    def process(self, args: Sequence[str]) -> Sequence[str]:
+        """Implement of general argument processing."""
+        trigger_by_processor = self._final_trigger_by_processor
+        if len(args) == 0:
+            raise TriggerError("A trigger is expected for options.")
+
+        if args[0] not in trigger_by_processor:
+            raise TriggerError(f"Option {args[0]} not registered as a trigger.")
+
+        processor = trigger_by_processor[args[0]]
+        try:
+            ret_args = processor.bind(args)
+        except Exception as e:
+            self._exceptions.append(e)
+            return []
+
+        try:
+            self._value = processor.process(self._value)
+        except Exception as e:
+            self._exceptions.append(e)
+
+        return ret_args
 
     def help(self) -> OptHelp:
         default_str = str(self.default_value) if self.default_value != ... else ""
 
         return OptHelp(
-            triggers=self.final_trigger_help,
-            type_descr=self.target_type_str,
+            processors=[
+                ProcessorHelp(triggers=", ".join(x.triggers), type_descr=x.type_str)
+                for x in self.processors
+            ],
             default=default_str,
             descr=self.descr if self.descr is not None else "",
         )
 
 
-@mutable(slots=False, kw_only=True)
-class BoolOption(Option):
-    """Implementation of boolean options."""
-
-    pos_triggers: Set[str] = field(converter=set)
-    neg_triggers: Set[str] = field(converter=set)
-    _value: Union[bool, EllipsisType] = field(default=...)  # type: ignore
-
-    @property
-    def nargs(self) -> int:
-        return 1
-
-    @property
-    def unset(self) -> bool:
-        return self._value == ...
-
-    @property
-    def final_pos_triggers(self) -> Set[str]:
-        return self._adjust_triggers(self.pos_triggers)
-
-    @property
-    def final_neg_triggers(self) -> Set[str]:
-        return self._adjust_triggers(self.neg_triggers)
-
-    @property
-    def final_trigger_mappings(self) -> Dict[str, Option]:
-        return {x: self for x in (self.final_pos_triggers | self.final_neg_triggers)}
-
-    @property
-    def final_trigger_help(self):
-        return (
-            f"{', '.join(self.final_pos_triggers)} / "
-            f"{', '.join(self.final_neg_triggers)}"
-        )
-
-    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
-        """Process the arguments."""
-        if len(args) == 0:
-            raise OptionError("no trigger found")
-        # check that we have at least one argument, the trigger
-        if self.unset or self.multiple:
-            # check that the argument given matches the triggers
-            if args[0] in self.final_pos_triggers:
-                self._value = True
-            elif args[0] in self.final_neg_triggers:
-                self._value = False
-            else:
-                raise UnexpectedTriggerError(
-                    f"Option {args[0]} not registered as a trigger."
-                )
-        else:
-            raise Exception("Multiple calls not allowed")
-
-        if self.nargs != -1 and len(args) != self.nargs:
-            return args[self.nargs :]
-        else:
-            return None
-
-    @property
-    def target_type_str(self) -> str:
-        return "Bool"
-
-    @property
-    def value(self) -> bool:
-        if self.unset:
-            if self.default_value == ...:
-                raise UnspecifiedOptionError(
-                    f"Paramter {self.name} was not specified and has no default"
-                )
-            else:
-                return self.default_value
-        else:
-            return self._value
-
-
-@mutable(slots=False, kw_only=True)
-class KnownLenOpt(Option):
-    """Base class for options of known length."""
-
-    triggers: Set[str] = field(converter=set)
-    _target_type_str: str
-    type_converter: CLIArgConverterBase
-    _bound_args_list: List[BoundArgs] = field(init=False, factory=list)
-
-    def __attrs_post_init__(self):
-        # if multiple is true, it has to be a list
-        if self.multiple:
-            assert isinstance(self.value, list)
-
-    @property
-    def nargs(self) -> int:
-        if self.type_converter.num_required_args.min == -1:
-            return -1
-        else:
-            return self.type_converter.num_required_args.min + 1
-
-    @property
-    def unset(self) -> bool:
-        return len(self._bound_args_list) == 0
-
-    @property
-    def final_trigger_mappings(self) -> Dict[str, Option]:
-        return {x: self for x in self._adjust_triggers(self.triggers)}
-
-    @property
-    def final_trigger_help(self) -> str:
-        return f"{', '.join(self.final_trigger_mappings.keys())}"
-
-    def _process_args(self, args: Sequence[str]) -> None:
-        """Process the arguments and store in value."""
-        if self.unset or self.multiple:
-            self._bound_args_list.append(BoundArgs(self.type_converter, args))
-        else:
-            raise Exception("Multiple calls not allowed")
-
-    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
-        """Implement of general argument processing."""
-        if self.nargs != -1 and len(args) < self.nargs:
-            raise OptionError(
-                "Not enough arguments found. Expected "
-                f"{self.nargs} but got {len(args)}."
-            )
-        if args[0] not in self.final_trigger_mappings:
-            raise UnexpectedTriggerError(
-                f"Option {args[0]} not registered as a trigger."
-            )
-
-        if self.nargs != -1 and len(args) != self.nargs:
-            self._process_args(args[1 : self.nargs])
-            return args[self.nargs :]
-        else:
-            self._process_args(args[1:])
-            return None
-
-    @property
-    def target_type_str(self) -> str:
-        return self._target_type_str
-
-    @target_type_str.setter
-    def target_type_str(self, value: str):
-        self._target_type_str = value
-
-    @property
-    def value(self) -> Any:
-        if self.unset:
-            if self.default_value == ...:
-                raise UnspecifiedOptionError(
-                    f"Paramter {self.name} was not specified and has no default"
-                )
-            else:
-                return self.default_value
-        else:
-            if self.multiple:
-                return [x.convert() for x in self._bound_args_list]
-            else:
-                return self._bound_args_list[0].convert()
-
-
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class Argument(Parameter):
-    def help(self) -> ArgHelp:
-        default_str = str(self.default_value) if self.default_value != ... else ""
-        return ArgHelp(
-            name=self.name,
-            type_descr=self.target_type_str,
-            default=default_str,
-            descr=self.descr if self.descr is not None else "",
-        )
-
-
-@mutable(slots=False, kw_only=True)
-class KnownLenArg(Argument):
-
-    _target_type_str: str
-    callback: Optional[Callable[[Any], Any]] = field(default=None)
+    type_str: str
     type_converter: CLIArgConverterBase
-    _bound_args: Optional[BoundArgs] = None
 
     @property
     def nargs(self) -> int:
         return self.type_converter.num_required_args.max
 
-    @property
-    def unset(self) -> bool:
-        return self._bound_args is None
-
-    def _process_args(self, args: Sequence[str]) -> None:
-        """Process the arguments and store in value."""
-        if self.unset:
-            self._bound_args = BoundArgs(self.type_converter, args)
-        else:
-            raise Exception("Multiple calls not allowed")
-
-    def bind(self, args: Sequence[str]) -> Optional[Sequence[str]]:
+    def process(self, args: Sequence[str]) -> Sequence[str]:
         """Implement of general argument processing."""
-        if self.nargs != -1 and len(args) != self.nargs:
-            self._process_args(args[: self.nargs])
-            return args[self.nargs :]
-        else:
-            self._process_args(args)
-            return None
+        try:
+            num_req_args = self.type_converter.num_requested_args(len(args))
+            bound_args = args[:num_req_args]
+            ret_args = args[num_req_args:]
+        except Exception as e:
+            self._exceptions.append(e)
+            return []
 
-    @property
-    def target_type_str(self) -> str:
-        return self._target_type_str
+        try:
+            self._value = self.type_converter.convert(bound_args)
+        except Exception as e:
+            self._exceptions.append(e)
 
-    @target_type_str.setter
-    def target_type_str(self, value: str):
-        self._target_type_str = value
+        return ret_args
 
-    @property
-    def value(self) -> Any:
-        if self.unset:
-            if self.default_value == ...:
-                raise UnspecifiedArgumentError(
-                    f"Paramter {self.name} was not specified and has no default"
-                )
-            else:
-                return self.default_value
-        else:
-            return self._bound_args.convert()  # type: ignore
+    def help(self) -> ArgHelp:
+        default_str = str(self.default_value) if self.default_value != ... else ""
+        return ArgHelp(
+            name=self.name,
+            type_descr=self.type_str,
+            default=default_str,
+            descr=self.descr if self.descr is not None else "",
+        )

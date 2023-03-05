@@ -13,7 +13,11 @@ class ThermiteException(Exception):
     pass
 
 
-class UnexpectedTriggerError(Exception):
+class TriggerError(Exception):
+    pass
+
+
+class ParameterError(Exception):
     pass
 
 

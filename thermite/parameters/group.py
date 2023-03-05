@@ -3,11 +3,12 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
+from typing_extensions import assert_never
 
 from thermite.exceptions import (
     DuplicatedTriggerError,
+    TriggerError,
     UnexpectedReturnTypeError,
-    UnexpectedTriggerError,
     UnspecifiedObjError,
     UnspecifiedOptionError,
 )
@@ -100,20 +101,20 @@ class ParameterGroup:
         self._child_prefix_omit_name = child_prefix_omit_name
         self._set_prefix_children()
 
-    def bind(self, input_args: Sequence[str]) -> Optional[Sequence[str]]:
+    def process(self, input_args: Sequence[str]) -> Sequence[str]:
         if len(input_args) == 0:
             return []
 
         if input_args[0].startswith("-"):
-            opts_by_trigger = self.final_trigger_mappings
+            opts_by_trigger = self.final_trigger_map
             if input_args[0] in opts_by_trigger:
                 self._num_bound += 1
                 opt = opts_by_trigger[input_args[0]]
-                bind_res = opt.bind(input_args)
+                bind_res = opt.process(input_args)
 
                 return bind_res
             else:
-                raise UnexpectedTriggerError(f"No option with trigger {input_args[0]}")
+                raise TriggerError(f"No option with trigger {input_args[0]}")
 
         else:
             for argument in self.cli_args:
@@ -122,7 +123,7 @@ class ParameterGroup:
                     args_use, args_remain = split_args_by_nargs(
                         input_args, argument.nargs
                     )
-                    argument.bind(args_use)
+                    argument.process(args_use)
                     return args_remain
 
         return input_args
@@ -176,17 +177,30 @@ class ParameterGroup:
         return posargs_opts + varposarg_opts + kwargs_opts
 
     @property
-    def final_trigger_mappings(self) -> Dict[str, Union[Option, "ParameterGroup"]]:
+    def final_trigger_map(self) -> Dict[str, Union[Option, "ParameterGroup"]]:
         all_trigger_mappings: Dict[str, Union[Option, "ParameterGroup"]] = {}
         for opt in self.cli_opts:
-            for trigger, trigger_opt in opt.final_trigger_mappings.items():
-                if trigger in all_trigger_mappings:
-                    raise DuplicatedTriggerError(
-                        f"Trigger {trigger} is in options {trigger_opt} "
-                        f"and {all_trigger_mappings[trigger]}"
-                    )
-                else:
-                    all_trigger_mappings[trigger] = opt
+            if isinstance(opt, Option):
+                for trigger in opt.final_triggers:
+                    if trigger in all_trigger_mappings:
+                        raise DuplicatedTriggerError(
+                            f"Trigger {trigger} option {opt} "
+                            f"and {all_trigger_mappings[trigger]}"
+                        )
+                    else:
+                        all_trigger_mappings[trigger] = opt
+            elif isinstance(opt, ParameterGroup):
+                for trigger, trigger_opt in opt.final_trigger_map.items():
+                    if trigger in all_trigger_mappings:
+                        raise DuplicatedTriggerError(
+                            f"Trigger {trigger} is in options {trigger_opt} "
+                            f"and {all_trigger_mappings[trigger]}"
+                        )
+                    else:
+                        all_trigger_mappings[trigger] = opt
+            else:
+                assert_never(opt)
+
         return all_trigger_mappings
 
     def help_opts_only(self) -> OptionGroupHelp:

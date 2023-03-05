@@ -1,11 +1,11 @@
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import pytest
-from rich.console import Console
 
 from thermite.command import Command, help_callback, run
 from thermite.exceptions import (
-    UnexpectedTriggerError,
+    ParameterError,
+    TriggerError,
     UnprocessedArgumentError,
     UnspecifiedArgumentError,
     UnspecifiedOptionError,
@@ -41,28 +41,21 @@ from .examples.app import (
         (
             func_kw_or_pos,
             ("--b", "test"),
-            UnspecifiedOptionError,
+            ParameterError,
             (),
             {},
         ),
         (
             func_pos_only,
-            ("1", "test"),
+            ("--a", "1", "--b", "test"),
             None,
             (1, "test"),
             {},
         ),
         (
             func_pos_only,
-            ("--a", "1", "--b", "test"),
-            UnexpectedTriggerError,
             (),
-            {},
-        ),
-        (
-            func_pos_only,
-            (),
-            UnspecifiedArgumentError,
+            ParameterError,
             (),
             {},
         ),
@@ -82,7 +75,7 @@ from .examples.app import (
         ),
     ],
 )
-def test_command_bind(
+def test_command_process(
     obj: Union[Callable, Type],
     input_args: Sequence[str],
     process_exc: Optional[Type],
@@ -93,13 +86,13 @@ def test_command_bind(
 
     if process_exc is not None:
         with pytest.raises(process_exc):
-            res = command.bind(input_args)
+            res = command.process(input_args)
             if len(res) > 0:
                 raise UnprocessedArgumentError()
             assert command.param_group.args_values == output_args
             assert command.param_group.kwargs_values == output_kwargs
     else:
-        command.bind(input_args)
+        command.process(input_args)
         assert command.param_group.args_values == output_args
         assert command.param_group.kwargs_values == output_kwargs
 
@@ -137,12 +130,12 @@ def test_command_subcommands(
 
     if process_exc is not None:
         with pytest.raises(process_exc):
-            res = command.bind(input_args)
+            res = command.process(input_args)
             if len(res) > 0:
                 raise UnprocessedArgumentError()
             assert set(command.subcommands.keys()) == set(subcommands)
     else:
-        command.bind(input_args)
+        command.process(input_args)
         assert set(command.subcommands.keys()) == set(subcommands)
 
 
