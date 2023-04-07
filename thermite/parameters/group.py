@@ -37,7 +37,7 @@ class ParameterGroup:
     def _exec_obj(self) -> Any:
         if self.obj is None:
             raise UnspecifiedObjError()
-        if inspect.isfunction(self.obj):
+        if inspect.isfunction(self.obj) or inspect.ismethod(self.obj):
             res_obj = self.obj(*self.args_values, **self.kwargs_values)
             if not is_bearable(res_obj, self._expected_ret_type):
                 raise UnexpectedReturnTypeError(
@@ -137,8 +137,34 @@ class ParameterGroup:
         return tuple(res)
 
     @property
+    def args_values_with_exc(self) -> Tuple[Any, ...]:
+        res = []
+        for x in self._posargs:
+            try:
+                res.append(x.value)
+            except Exception as e:
+                res.append(e)
+        for arg in self._varposargs:
+            try:
+                res.extend(arg.value)
+            except Exception as e:
+                res.append(e)
+
+        return tuple(res)
+
+    @property
     def kwargs_values(self) -> Dict[str, Any]:
         return {key: arg.value for key, arg in self._kwargs.items()}
+
+    @property
+    def kwargs_values_with_exc(self) -> Dict[str, Any]:
+        res = {}
+        for key, arg in self._kwargs.items():
+            try:
+                res[key] = arg.value
+            except Exception as e:
+                res[key] = e
+        return res
 
     @property
     def unset(self) -> bool:

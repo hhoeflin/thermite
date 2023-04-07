@@ -2,7 +2,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, U
 
 import pytest
 
-from thermite.command import Command, help_callback, run
+from thermite.callbacks import help_callback
+from thermite.command import Command
 from thermite.exceptions import (
     ParameterError,
     TriggerError,
@@ -10,6 +11,7 @@ from thermite.exceptions import (
     UnspecifiedArgumentError,
     UnspecifiedOptionError,
 )
+from thermite.run import run
 
 from .examples import (
     NestedClass,
