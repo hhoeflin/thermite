@@ -23,7 +23,7 @@ from thermite.type_converters import (
     TooFewArgsError,
 )
 
-from .examples.app import NestedClass
+from .examples import NestedClass
 
 
 @mutable

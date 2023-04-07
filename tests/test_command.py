@@ -11,7 +11,7 @@ from thermite.exceptions import (
     UnspecifiedOptionError,
 )
 
-from .examples.app import (
+from .examples import (
     NestedClass,
     Subcommands,
     func_kw_or_pos,
@@ -140,7 +140,7 @@ def test_command_subcommands(
 
 
 if __name__ == "__main__":
-    from .examples.app import Aggregation, subcommands_function
+    from examples import Aggregation, subcommands_function
 
     # run(
     #    subcommands_function,

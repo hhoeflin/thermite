@@ -271,7 +271,7 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
     # Note how to do eager callbacks?
     # how to do lazy callbacks?
     while len(input_args) > 0:
-        input_args = cmd.bind(input_args)
+        input_args = cmd.process(input_args)
         if len(input_args) > 0:
             cmd = cmd.invoke_subcommand(input_args[0])
             input_args = input_args[1:]
@@ -283,6 +283,7 @@ def run(
     obj: Any,
     store: Optional[CLIArgConverterStore] = None,
     callbacks: Optional[List[Callback]] = None,
+    add_help_cb: bool = True,
     exception_handlers: Optional[
         List[Callable[[Exception], Optional[Exception]]]
     ] = None,
@@ -294,15 +295,18 @@ def run(
     if store is not None:
         Command.store = store
 
+    if callbacks is None:
+        callbacks = []
+    if add_help_cb:
+        callbacks.append(help_callback)
+    Command.global_callbacks = callbacks
+
     if exception_handlers is None:
         exception_handlers = []
     if add_thermite_exc_handler:
         exception_handlers.insert(0, thermite_exc_handler)
     if add_rich_exc_handler:
         exception_handlers.append(RichExcHandler())
-
-    if callbacks is not None:
-        Command.global_callbacks = callbacks
 
     try:
         cmd = Command.from_obj(obj, name=name)
