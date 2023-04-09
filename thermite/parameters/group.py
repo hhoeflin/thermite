@@ -3,13 +3,14 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
+from exceptiongroup import ExceptionGroup
 from typing_extensions import assert_never
 
 from thermite.exceptions import (
     DuplicatedTriggerError,
+    MultiParameterError,
+    ParameterError,
     TriggerError,
-    UnexpectedReturnTypeError,
-    UnspecifiedObjError,
     UnspecifiedOptionError,
 )
 from thermite.help import OptionGroupHelp
@@ -24,6 +25,7 @@ EllipsisType = type(...)
 class ParameterGroup:
     descr: Optional[str] = None
     obj: Any = None
+    default_value: Any = field(default=...)
     _expected_ret_type: object = None
     _posargs: List[Union[Parameter, "ParameterGroup"]]
     _varposargs: List[Union[Parameter, "ParameterGroup"]]
@@ -31,21 +33,44 @@ class ParameterGroup:
     _prefix: str = ""
     _name: str = ""
     _num_bound: int = field(default=0, init=False)
-    default_value: Any = field(default=...)
     _child_prefix_omit_name: bool = True
 
     def _exec_obj(self) -> Any:
         if self.obj is None:
-            raise UnspecifiedObjError()
+            raise ParameterError("No object specified in ParameterGroup {self._name}")
+
+        # check if all the input parameters are ok
+        args = self.args_values
+        kwargs = self.kwargs_values
+        caught_errors = [x for x in args if isinstance(x, ParameterError)] + [
+            v for v in kwargs.values() if isinstance(v, ParameterError)
+        ]
+
+        if len(caught_errors) > 0:
+            raise MultiParameterError(
+                f"Caught {len(caught_errors)} in parameters of ParameterGroup '{self._name}'",
+                caught_errors,
+            )
+
         if inspect.isfunction(self.obj) or inspect.ismethod(self.obj):
-            res_obj = self.obj(*self.args_values, **self.kwargs_values)
+            try:
+                res_obj = self.obj(*self.args_values, **self.kwargs_values)
+            except Exception as e:
+                raise ParameterError(
+                    f"Error processing object in ParameterGroup {self._name}"
+                ) from e
             if not is_bearable(res_obj, self._expected_ret_type):
-                raise UnexpectedReturnTypeError(
+                raise ParameterError(
                     f"Expected return type {str(self._expected_ret_type)} "
-                    f"but got {str(type(res_obj))}"
+                    f"but got {str(type(res_obj))} in ParameterGroup '{self._name}'"
                 )
         elif inspect.isclass(self.obj):
-            res_obj = self.obj(*self.args_values, **self.kwargs_values)
+            try:
+                res_obj = self.obj(*self.args_values, **self.kwargs_values)
+            except Exception as e:
+                raise ParameterError(
+                    f"Error processing object in ParameterGroup {self._name}"
+                ) from e
         else:
             raise NotImplementedError()
 
@@ -128,6 +153,9 @@ class ParameterGroup:
 
         return input_args
 
+    def _num_params(self) -> int:
+        return len(self._posargs) + len(self._varposargs) + len(self._kwargs)
+
     @property
     def args_values(self) -> Tuple[Any, ...]:
         res = [x.value for x in self._posargs]
@@ -137,7 +165,7 @@ class ParameterGroup:
         return tuple(res)
 
     @property
-    def args_values_with_exc(self) -> Tuple[Any, ...]:
+    def args_values_with_excs(self) -> Tuple[Any, ...]:
         res = []
         for x in self._posargs:
             try:
@@ -157,7 +185,7 @@ class ParameterGroup:
         return {key: arg.value for key, arg in self._kwargs.items()}
 
     @property
-    def kwargs_values_with_exc(self) -> Dict[str, Any]:
+    def kwargs_values_with_excs(self) -> Dict[str, Any]:
         res = {}
         for key, arg in self._kwargs.items():
             try:
@@ -172,15 +200,20 @@ class ParameterGroup:
 
     @property
     def value(self) -> Any:
-        if self.unset:
-            if self.default_value == ...:
-                raise UnspecifiedOptionError(
-                    f"Paramter {self.name} was not specified and has no default"
-                )
+        try:
+            if self._num_params() == 0 or not self.unset:
+                return self._exec_obj()
             else:
-                return self.default_value
-        else:
-            return self._exec_obj()
+                if self.default_value == ...:
+                    raise UnspecifiedOptionError(
+                        f"Paramter {self.name} was not specified and has no default"
+                    )
+                else:
+                    return self.default_value
+        except ParameterError:
+            raise
+        except Exception as e:
+            raise ParameterError(f"Error in ParameterGroup '{self._name}'") from e
 
     @property
     def cli_args(self) -> List[Argument]:

@@ -130,7 +130,7 @@ class Command:
         )
         return cls(
             param_group=param_group,
-            subcommands=extract_subcommands(param_group._expected_ret_type),
+            subcommands=extract_subcommands(klass),
         )
 
     @classmethod

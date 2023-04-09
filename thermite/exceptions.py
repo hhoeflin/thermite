@@ -1,8 +1,11 @@
 import sys
+import textwrap
+import traceback
 from types import ModuleType
-from typing import Iterable, Optional, Union
+from typing import Iterable, List, Optional, Union
 
 from attrs import asdict, mutable
+from exceptiongroup import ExceptionGroup, format_exception_only
 from rich.text import Text
 from rich.traceback import LOCALS_MAX_LENGTH, LOCALS_MAX_STRING, Traceback
 
@@ -13,31 +16,35 @@ class ThermiteException(Exception):
     pass
 
 
-class TriggerError(Exception):
+class TriggerError(ThermiteException):
     pass
 
 
-class ParameterError(Exception):
+class ParameterError(ThermiteException):
     pass
 
 
-class UnmatchedOriginError(Exception):
+class MultiParameterError(ParameterError, ExceptionGroup):
     pass
 
 
-class IncorrectNumberArgs(Exception):
+class UnmatchedOriginError(ThermiteException):
     pass
 
 
-class DuplicatedTriggerError(Exception):
+class IncorrectNumberArgs(ThermiteException):
     pass
 
 
-class NothingProcessedError(Exception):
+class DuplicatedTriggerError(ThermiteException):
     pass
 
 
-class TooFewInputsError(Exception):
+class NothingProcessedError(ThermiteException):
+    pass
+
+
+class TooFewInputsError(ThermiteException):
     pass
 
 
@@ -53,29 +60,35 @@ class UnspecifiedArgumentError(UnspecifiedParameterError):
     pass
 
 
-class UnspecifiedObjError(Exception):
+class UnprocessedArgumentError(ThermiteException):
     pass
 
 
-class UnprocessedArgumentError(Exception):
+class UnknownArgumentError(ThermiteException):
     pass
 
 
-class UnexpectedReturnTypeError(Exception):
+class UnknownOptionError(ThermiteException):
     pass
 
 
-class UnknownArgumentError(Exception):
-    pass
+def format_exc_with_cause(exc: Exception) -> str:
+    res = "".join(format_exception_only(exc))
 
+    if exc.__cause__ is not None:
+        sub_res = format_exc_with_cause(exc.__cause__)
+        sub_res = textwrap.indent("".join(sub_res), prefix="  ")
+        import pudb
 
-class UnknownOptionError(Exception):
-    pass
+        pudb.set_trace()
+        res = res + "\nThis exception is caused by:\n" + sub_res
+
+    return res
 
 
 def thermite_exc_handler(exc: Exception) -> Optional[Exception]:
     if isinstance(exc, ThermiteException):
-        console.print(Text(f"{exc.__class__.__name__}: ") + Text(str(exc)))
+        console.print(format_exc_with_cause(exc))
         sys.exit(1)
     else:
         return exc

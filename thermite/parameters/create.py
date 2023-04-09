@@ -107,7 +107,7 @@ def process_parameter(
                 pos_triggers=[f"--{clify_argname(param.name)}"],
                 neg_triggers=[f"--no-{clify_argname(param.name)}"],
             )
-        elif get_origin(annot_to_use) in (List, Sequence):
+        elif get_origin(annot_to_use) in (List, list, Sequence):
             annot_args = get_args(annot_to_use)
             if len(annot_args) == 0:
                 inner_type = str
@@ -115,7 +115,6 @@ def process_parameter(
                 inner_type = annot_args[0]
             else:
                 raise TypeError(f"{str(annot_to_use)} has more than 1 argument.")
-
             conv = store.get_converter(inner_type)
             return Option(
                 name=param.name,

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List
 
 from thermite import run
-from thermite.callbacks import noop_callback
+from thermite.callbacks import noop_callback, show_bindings_callback
 
 
 class Subcommands:
@@ -22,4 +22,4 @@ class Subcommands:
 
 
 if __name__ == "__main__":
-    run(Subcommands, callbacks=[noop_callback])
+    run(Subcommands, callbacks=[noop_callback, show_bindings_callback])
