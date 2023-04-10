@@ -1,9 +1,9 @@
 import inspect
+from collections.abc import MutableMapping
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
-from exceptiongroup import ExceptionGroup
 from typing_extensions import assert_never
 
 from thermite.exceptions import (
@@ -11,7 +11,6 @@ from thermite.exceptions import (
     MultiParameterError,
     ParameterError,
     TriggerError,
-    UnspecifiedOptionError,
 )
 from thermite.help import OptionGroupHelp
 from thermite.utils import split_args_by_nargs
@@ -22,7 +21,7 @@ EllipsisType = type(...)
 
 
 @mutable(slots=False, kw_only=True)
-class ParameterGroup:
+class ParameterGroup(MutableMapping):
     descr: Optional[str] = None
     obj: Any = None
     default_value: Any = field(default=...)
@@ -39,6 +38,61 @@ class ParameterGroup:
         self._set_prefix_children()
         if self._expected_ret_type == inspect._empty:
             self._expected_ret_type = type(None)
+
+    def __getitem__(self, key) -> Union[Parameter, "ParameterGroup"]:
+        for param in self._posargs:
+            if param.name == key:
+                return param
+
+        for param in self._varposargs:
+            if param.name == key:
+                return param
+
+        if key in self._kwargs:
+            return self._kwargs[key]
+
+        raise KeyError(f"Parameter with name {key} not found.")
+
+    def __setitem__(self, key, value):
+        if not isinstance(value, Parameter) or isinstance(value, ParameterGroup):
+            raise ValueError("Can only set object of type Parameter or ParameterGroup")
+
+        if not value.name == key:
+            raise ValueError(
+                "The name of the parameter being set has to be equal to the key"
+            )
+
+        for i, param in enumerate(self._posargs):
+            if key == param.name:
+                self._posargs[i] = value
+                return
+
+        for i, param in enumerate(self._varposargs):
+            if key == param.name:
+                self._varposargs[i] = value
+                return
+
+        if key in self._kwargs:
+            self._kwargs[key] = value
+            return
+
+        raise KeyError(f"Parameter with name {key} not found.")
+
+    def __delitem__(self, key):
+        del key
+        raise Exception("Deleting of paraeters not possible.")
+
+    def __len__(self) -> int:
+        return len(self._posargs) + len(self._varposargs) + len(self._kwargs)
+
+    def __iter__(self):
+        for param in self._posargs:
+            yield param.name
+
+        for param in self._varposargs:
+            yield param.name
+
+        yield from self._kwargs
 
     def _exec_obj(self) -> Any:
         if self.obj is None:

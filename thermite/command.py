@@ -1,6 +1,7 @@
 import inspect
 import sys
 import types
+from collections.abc import MutableMapping
 from inspect import Signature, classify_class_attrs
 from typing import (
     Any,
@@ -11,6 +12,7 @@ from typing import (
     Optional,
     Sequence,
     Type,
+    Union,
     get_origin,
 )
 
@@ -20,6 +22,7 @@ from thermite.help import CbHelp, CommandHelp, extract_descriptions
 from thermite.utils import clify_argname
 
 from .parameters import (
+    Parameter,
     ParameterGroup,
     process_class_to_param_group,
     process_function_to_param_group,
@@ -85,7 +88,7 @@ def extract_subcommands(
 
 
 @mutable
-class Command:
+class Command(MutableMapping):
     param_group: ParameterGroup
     subcommands: Dict[str, Subcommand]
     prev_cmd: Optional["Command"] = None
@@ -96,6 +99,21 @@ class Command:
     def __attrs_post_init__(self):
         if len(self.param_group.cli_args) > 0 and len(self.subcommands) > 0:
             raise Exception("Can't have CLI that has subcommands and arguments")
+
+    def __getitem__(self, key) -> Union[Parameter, ParameterGroup]:
+        return self.param_group[key]
+
+    def __setitem__(self, key, value):
+        self.param_group[key] = value
+
+    def __delitem__(self, key):
+        self.param_group.__delitem__(key)
+
+    def __len__(self):
+        return len(self.param_group)
+
+    def __iter__(self):
+        return self.param_group.__iter__()
 
     @classmethod
     def _from_function(cls, func: Callable, name: str):

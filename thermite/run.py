@@ -9,6 +9,7 @@ from thermite.exceptions import RichExcHandler, ThermiteExcHandler
 
 from .callbacks import Callback, help_callback
 from .command import Command
+from .exceptions import CommandError, ParameterError
 from .type_converters import CLIArgConverterStore
 
 
@@ -26,7 +27,12 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
             cmd = cmd.invoke_subcommand(input_args[0])
             input_args = input_args[1:]
         else:
-            return cmd.param_group.value
+            try:
+                return cmd.param_group.value
+            except ParameterError as e:
+                raise CommandError(
+                    f"Error processing command {cmd.param_group.name}"
+                ) from e
 
 
 def run(

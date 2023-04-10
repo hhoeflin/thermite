@@ -1,13 +1,11 @@
 import sys
-import textwrap
 import traceback
 from types import ModuleType
-from typing import Iterable, List, Optional, Union
+from typing import Iterable, Optional, Union
 
+import rich.traceback as rtb
 from attrs import asdict, mutable
-from exceptiongroup import ExceptionGroup, format_exception_only
-from rich.text import Text
-from rich.traceback import LOCALS_MAX_LENGTH, LOCALS_MAX_STRING, Traceback
+from exceptiongroup import ExceptionGroup
 
 from thermite.rich import console
 
@@ -72,6 +70,10 @@ class UnknownOptionError(ThermiteException):
     pass
 
 
+class CommandError(ThermiteException):
+    pass
+
+
 def remove_tb(exc: Exception) -> Exception:
     if exc.__cause__ is not None:
         exc.__cause__ = remove_tb(exc.__cause__)  # type: ignore
@@ -106,8 +108,8 @@ class RichExcHandler:
     theme: Optional[str] = None
     word_wrap: bool = False
     show_locals: bool = True
-    locals_max_length: int = LOCALS_MAX_LENGTH
-    locals_max_string: int = LOCALS_MAX_STRING
+    locals_max_length: int = rtb.LOCALS_MAX_LENGTH
+    locals_max_string: int = rtb.LOCALS_MAX_STRING
     locals_hide_dunder: bool = True
     locals_hide_sunder: bool = False
     indent_guides: bool = True
@@ -115,7 +117,7 @@ class RichExcHandler:
     max_frames: int = 100
 
     def __call__(self, exc: Exception) -> Optional[Exception]:
-        trace = Traceback.from_exception(
+        trace = rtb.Traceback.from_exception(
             type(exc), exc, exc.__traceback__, **asdict(self)
         )
         console.print(trace)
