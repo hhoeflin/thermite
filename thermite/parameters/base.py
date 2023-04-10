@@ -55,7 +55,7 @@ class Parameter(ABC):
                 raise self._exceptions[0]
             else:
                 raise ExceptionGroup(
-                    f"Multiple errors in {self.__class__.__name__}",
+                    f"Multiple errors in {self.name}",
                     self._exceptions,
                 )
         elif self._value != ...:
