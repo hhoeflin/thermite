@@ -35,6 +35,11 @@ class ParameterGroup:
     _num_bound: int = field(default=0, init=False)
     _child_prefix_omit_name: bool = True
 
+    def __attrs_post_init__(self):
+        self._set_prefix_children()
+        if self._expected_ret_type == inspect._empty:
+            self._expected_ret_type = type(None)
+
     def _exec_obj(self) -> Any:
         if self.obj is None:
             raise ParameterError(f"No object specified in ParameterGroup {self._name}")
@@ -75,9 +80,6 @@ class ParameterGroup:
             raise NotImplementedError()
 
         return res_obj
-
-    def __attrs_post_init__(self):
-        self._set_prefix_children()
 
     @property
     def child_prefix(self) -> str:

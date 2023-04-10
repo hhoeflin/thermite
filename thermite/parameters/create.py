@@ -14,7 +14,6 @@ from typing import (
 )
 
 from docstring_parser import parse
-from immutabledict import immutabledict
 
 from thermite.help import extract_descriptions
 from thermite.type_converters import CLIArgConverterStore
@@ -173,7 +172,6 @@ def parse_func_signature(
     List[Union[Parameter, ParameterGroup]],
     Dict[str, Union[Parameter, ParameterGroup]],
 ]:
-
     posargs = []
     varposargs = []
     kwargs = {}
