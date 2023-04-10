@@ -45,6 +45,10 @@ class Parameter(ABC):
         return self._value == ... and len(self._exceptions) == 0
 
     @property
+    def is_required(self) -> bool:
+        return self.default_value == ...
+
+    @property
     def value(self) -> Any:
         if len(self._exceptions) > 0:
             if len(self._exceptions) == 1:

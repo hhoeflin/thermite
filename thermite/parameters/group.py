@@ -37,11 +37,11 @@ class ParameterGroup:
 
     def _exec_obj(self) -> Any:
         if self.obj is None:
-            raise ParameterError("No object specified in ParameterGroup {self._name}")
+            raise ParameterError(f"No object specified in ParameterGroup {self._name}")
 
         # check if all the input parameters are ok
-        args = self.args_values
-        kwargs = self.kwargs_values
+        args = self.args_values_with_excs
+        kwargs = self.kwargs_values_with_excs
         caught_errors = [x for x in args if isinstance(x, ParameterError)] + [
             v for v in kwargs.values() if isinstance(v, ParameterError)
         ]
@@ -199,17 +199,16 @@ class ParameterGroup:
         return self._num_bound == 0
 
     @property
+    def is_required(self) -> bool:
+        return self.default_value == ... and self._num_params() > 0
+
+    @property
     def value(self) -> Any:
         try:
-            if self._num_params() == 0 or not self.unset:
+            if self._num_params() == 0 or not self.unset or self.default_value == ...:
                 return self._exec_obj()
             else:
-                if self.default_value == ...:
-                    raise UnspecifiedOptionError(
-                        f"Paramter {self.name} was not specified and has no default"
-                    )
-                else:
-                    return self.default_value
+                return self.default_value
         except ParameterError:
             raise
         except Exception as e:

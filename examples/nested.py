@@ -16,9 +16,7 @@ class Config:
         config_para2: Second parameter
     """
 
-    def __init__(
-        self, config_param1: str = "foo", config_para2: Path = Path("foo/bar")
-    ):
+    def __init__(self, config_param1: str, config_para2: Path = Path("foo/bar")):
         pass
 
 
@@ -27,6 +25,7 @@ def example(param1: str, param2: float, param3: List[int], param4: Config):
     print(f"param2: {param2}")
     print(f"param3: {param3}")
     print(f"param4: {param4}")
+
 
 if __name__ == "__main__":
     run(example)

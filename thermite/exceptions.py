@@ -72,26 +72,31 @@ class UnknownOptionError(ThermiteException):
     pass
 
 
-def format_exc_with_cause(exc: Exception) -> str:
-    res = "".join(format_exception_only(exc))
-
+def remove_tb(exc: Exception) -> Exception:
     if exc.__cause__ is not None:
-        sub_res = format_exc_with_cause(exc.__cause__)
-        sub_res = textwrap.indent("".join(sub_res), prefix="  ")
-        import pudb
+        exc.__cause__ = remove_tb(exc.__cause__)  # type: ignore
 
-        pudb.set_trace()
-        res = res + "\nThis exception is caused by:\n" + sub_res
+    if isinstance(exc, ExceptionGroup):
+        exc = ExceptionGroup(str(exc), [remove_tb(subexc) for subexc in exc.exceptions])
 
-    return res
+    exc.__traceback__ = None
+
+    return exc
 
 
-def thermite_exc_handler(exc: Exception) -> Optional[Exception]:
-    if isinstance(exc, ThermiteException):
-        console.print(format_exc_with_cause(exc))
-        sys.exit(1)
-    else:
-        return exc
+@mutable
+class ThermiteExcHandler:
+    show_tb: bool = False
+
+    def __call__(self, exc: Exception):
+        if isinstance(exc, ThermiteException):
+            if not self.show_tb:
+                exc = remove_tb(exc)
+            tb_exc = traceback.TracebackException.from_exception(exc)
+            console.print("".join(list(tb_exc.format())))
+            sys.exit(1)
+        else:
+            return exc
 
 
 @mutable

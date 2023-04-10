@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Optional, Union
 
 from attrs import mutable
 
-from thermite.exceptions import RichExcHandler, thermite_exc_handler
+from thermite.exceptions import RichExcHandler, ThermiteExcHandler
 
 from .callbacks import Callback, help_callback
 from .command import Command
@@ -19,8 +19,9 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
     The arguments are processes for the current command, and then
     followed up with further processing in subcommands as needed.
     """
-    while len(input_args) > 0:
-        input_args = cmd.process(input_args)
+    while True:
+        if len(input_args) > 0:
+            input_args = cmd.process(input_args)
         if len(input_args) > 0:
             cmd = cmd.invoke_subcommand(input_args[0])
             input_args = input_args[1:]
@@ -53,7 +54,7 @@ def run(
     if exception_handlers is None:
         exception_handlers = []
     if add_thermite_exc_handler:
-        exception_handlers.insert(0, thermite_exc_handler)
+        exception_handlers.append(ThermiteExcHandler(show_tb=False))
     if add_rich_exc_handler:
         exception_handlers.append(RichExcHandler())
 
