@@ -165,6 +165,18 @@ class TestBoolOption:
         )
         assert isinstance(opt, Parameter)
 
+    def test_convert_argument(self):
+        opt = bool_option(
+            name="a",
+            descr="test",
+            pos_triggers=("--yes",),
+            neg_triggers=("--no",),
+            default_value=...,
+            prefix="",
+        )
+        with pytest.raises(Exception, match="Can't convert option to argument"):
+            opt.to_argument()
+
 
 class TestOption:
     @pytest.mark.parametrize(
@@ -265,6 +277,25 @@ class TestOption:
         opt.process(["--path", "/a/b"])
         opt.process(["--path", "/c"])
         assert opt.value == [Path("/a/b"), Path("/c")]
+
+    def test_path_to_argument(self, store):
+        opt = Option(
+            name="a",
+            descr="Path option",
+            default_value=[],
+            processors=[
+                ConvertListTriggerProcessor(
+                    triggers=("--path", "-p"),
+                    type_str="Path",
+                    type_converter=PathCLIArgConverter(Path),
+                )
+            ],
+        )
+
+        arg = opt.to_argument()
+
+        arg.process(["/a/b", "/c"])
+        assert arg.value == [Path("/a/b"), Path("/c")]
 
 
 class TestArgument:

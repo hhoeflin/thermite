@@ -16,7 +16,8 @@ from typing import (
     get_origin,
 )
 
-from attrs import mutable
+from attrs import field, mutable
+from beartype.door import is_bearable
 
 from thermite.help import CbHelp, CommandHelp, extract_descriptions
 from thermite.utils import clify_argname
@@ -87,6 +88,44 @@ def extract_subcommands(
         return {}
 
 
+class CmdPostProc(MutableMapping):
+    def __init__(self, dict_update=None):
+        self.data = {}
+        if dict_update is not None:
+            for k, v in dict_update.items():
+                self[k] = v
+
+    @staticmethod
+    def _standardize(obj: Any) -> Any:
+        if inspect.isfunction(obj):
+            return obj
+        elif inspect.ismethod(obj):
+            return obj.__func__
+        elif isinstance(obj, type):
+            return obj
+        else:
+            return obj.__class__
+
+    def __getitem__(self, key) -> Callable[["Command"], "Command"]:
+        return self.data[self._standardize(key)]
+
+    def __setitem__(self, key, value: Callable[["Command"], "Command"]):
+        if not is_bearable(value, Callable[[Command], Command]):
+            raise ValueError(
+                "value has to be a function taking and returning a Command obj"
+            )
+        self.data[self._standardize(key)] = value
+
+    def __delitem__(self, key):
+        del self.data[self._standardize(key)]
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __iter__(self):
+        return iter(self.data)
+
+
 @mutable
 class Command(MutableMapping):
     param_group: ParameterGroup
@@ -95,6 +134,7 @@ class Command(MutableMapping):
 
     global_callbacks: ClassVar[List[Callback]] = []
     store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(add_defaults=True)
+    cmd_post_proc: ClassVar[CmdPostProc] = CmdPostProc()
 
     def __attrs_post_init__(self):
         if len(self.param_group.cli_args) > 0 and len(self.subcommands) > 0:
@@ -157,11 +197,16 @@ class Command(MutableMapping):
     @classmethod
     def from_obj(cls, obj: Any, name: str):
         if inspect.isfunction(obj) or inspect.ismethod(obj):
-            return cls._from_function(func=obj, name=name)
+            res = cls._from_function(func=obj, name=name)
         elif inspect.isclass(obj):
-            return cls._from_class(obj, name=name)
+            res = cls._from_class(obj, name=name)
         else:
             raise NotImplementedError()
+
+        if obj in cls.cmd_post_proc:
+            return cls.cmd_post_proc[obj](res)
+        else:
+            return res
 
     def process(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)

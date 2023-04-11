@@ -6,9 +6,17 @@ from exceptiongroup import ExceptionGroup
 
 from thermite.exceptions import ParameterError, TriggerError
 from thermite.help import ArgHelp, OptHelp, ProcessorHelp
-from thermite.type_converters import CLIArgConverterBase
+from thermite.type_converters import (
+    CLIArgConverterBase,
+    CLIArgConverterSimple,
+    ListCLIArgConverter,
+)
 
-from .processors import TriggerProcessor
+from .processors import (
+    ConvertListTriggerProcessor,
+    ConvertTriggerProcessor,
+    TriggerProcessor,
+)
 
 EllipsisType = type(...)
 
@@ -142,6 +150,39 @@ class Option(Parameter):
             default=default_str,
             descr=self.descr if self.descr is not None else "",
         )
+
+    def to_argument(self) -> "Argument":
+        # to convert it to an argument, we need a processor of subclass
+        # ConvertTriggerProcessor
+        type_converter = None
+        for proc in self._processors:
+            if isinstance(proc, ConvertListTriggerProcessor):
+                inner_converter = proc.type_converter
+                if not isinstance(inner_converter, CLIArgConverterSimple):
+                    raise Exception("Inner type converter needs to be simple")
+                type_converter = ListCLIArgConverter(
+                    target_type=List[inner_converter._target_type],  # type: ignore
+                    inner_converter=proc.type_converter,
+                )
+                type_str = proc.type_str
+                break
+            elif isinstance(proc, ConvertTriggerProcessor):
+                type_converter = proc.type_converter  # type: ignore
+                type_str = proc.type_str
+                break
+
+        if type_converter is None:
+            raise Exception("Can't convert option to argument")
+
+        res = Argument(
+            descr=self.descr,
+            name=self.name,
+            default_value=self.default_value,
+            type_str=type_str,
+            type_converter=type_converter,
+        )
+
+        return res
 
 
 @mutable(kw_only=True)
