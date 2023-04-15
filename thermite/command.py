@@ -88,7 +88,7 @@ def extract_subcommands(
         return {}
 
 
-class CmdPostProc(MutableMapping):
+class CmdPostProcStore(MutableMapping):
     def __init__(self, dict_update=None):
         self.data = {}
         if dict_update is not None:
@@ -126,6 +126,15 @@ class CmdPostProc(MutableMapping):
         return iter(self.data)
 
 
+def cb_list_to_trigger_map(cb_list: List[Callback]):
+    res = {}
+    for cb in cb_list:
+        for trigger in cb.triggers:
+            res[trigger] = cb
+
+    return res
+
+
 @mutable
 class Command(MutableMapping):
     param_group: ParameterGroup
@@ -137,7 +146,7 @@ class Command(MutableMapping):
     cli_args_store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(
         add_defaults=True
     )
-    cmd_post_proc: ClassVar[CmdPostProc] = CmdPostProc()
+    cmd_post_proc_store: ClassVar[CmdPostProcStore] = CmdPostProcStore()
 
     def __attrs_post_init__(self):
         if len(self.param_group.cli_args) > 0 and len(self.subcommands) > 0:
@@ -189,29 +198,6 @@ class Command(MutableMapping):
         )
 
     @classmethod
-    def _global_callbacks_map(cls) -> Dict[str, Callback]:
-        res = {}
-        for cb in cls.global_callbacks:
-            for trigger in cb.triggers:
-                res[trigger] = cb
-
-        return res
-
-    def _local_callbacks_map(self) -> Dict[str, Callback]:
-        res = {}
-        for cb in self.local_callbacks:
-            for trigger in cb.triggers:
-                res[trigger] = cb
-
-        return res
-
-    def _callbacks_map(self) -> Dict[str, Callback]:
-        res = self._global_callbacks_map()
-        res.update(self._local_callbacks_map())
-
-        return res
-
-    @classmethod
     def from_obj(cls, obj: Any, name: str):
         if inspect.isfunction(obj) or inspect.ismethod(obj):
             res = cls._from_function(func=obj, name=name)
@@ -228,7 +214,10 @@ class Command(MutableMapping):
     def process(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)
 
-        cb_map = self._callbacks_map()
+        cb_map = dict(
+            **cb_list_to_trigger_map(self.global_callbacks),
+            **cb_list_to_trigger_map(self.local_callbacks),
+        )
 
         while len(input_args_deque) > 0:
             input_args = input_args_deque.popleft()
