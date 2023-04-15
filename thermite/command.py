@@ -16,7 +16,7 @@ from typing import (
     get_origin,
 )
 
-from attrs import field, mutable
+from attrs import mutable
 from beartype.door import is_bearable
 
 from thermite.help import CbHelp, CommandHelp, extract_descriptions
