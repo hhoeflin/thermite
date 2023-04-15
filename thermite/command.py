@@ -133,7 +133,9 @@ class Command(MutableMapping):
     prev_cmd: Optional["Command"] = None
 
     global_callbacks: ClassVar[List[Callback]] = []
-    store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(add_defaults=True)
+    cli_args_store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(
+        add_defaults=True
+    )
     cmd_post_proc: ClassVar[CmdPostProc] = CmdPostProc()
 
     def __attrs_post_init__(self):
@@ -158,7 +160,7 @@ class Command(MutableMapping):
     @classmethod
     def _from_function(cls, func: Callable, name: str):
         param_group = process_function_to_param_group(
-            func, store=cls.store, name=name, child_prefix_omit_name=True
+            func, store=cls.cli_args_store, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
@@ -178,7 +180,7 @@ class Command(MutableMapping):
     @classmethod
     def _from_class(cls, klass: Type, name: str):
         param_group = process_class_to_param_group(
-            klass, store=cls.store, name=name, child_prefix_omit_name=True
+            klass, store=cls.cli_args_store, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
