@@ -16,7 +16,7 @@ from typing import (
     get_origin,
 )
 
-from attrs import mutable
+from attrs import field, mutable
 from beartype.door import is_bearable
 
 from thermite.help import CbHelp, CommandHelp, extract_descriptions
@@ -132,6 +132,7 @@ class Command(MutableMapping):
     subcommands: Dict[str, Subcommand]
     prev_cmd: Optional["Command"] = None
 
+    local_callbacks: List[Callback] = field(factory=list)
     global_callbacks: ClassVar[List[Callback]] = []
     cli_args_store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(
         add_defaults=True
@@ -196,6 +197,20 @@ class Command(MutableMapping):
 
         return res
 
+    def _local_callbacks_map(self) -> Dict[str, Callback]:
+        res = {}
+        for cb in self.local_callbacks:
+            for trigger in cb.triggers:
+                res[trigger] = cb
+
+        return res
+
+    def _callbacks_map(self) -> Dict[str, Callback]:
+        res = self._global_callbacks_map()
+        res.update(self._local_callbacks_map())
+
+        return res
+
     @classmethod
     def from_obj(cls, obj: Any, name: str):
         if inspect.isfunction(obj) or inspect.ismethod(obj):
@@ -213,7 +228,7 @@ class Command(MutableMapping):
     def process(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)
 
-        global_cb_map = self._global_callbacks_map()
+        cb_map = self._callbacks_map()
 
         while len(input_args_deque) > 0:
             input_args = input_args_deque.popleft()
@@ -222,8 +237,8 @@ class Command(MutableMapping):
             # only if that is not the case do we hand it to the
             # regular parameters; the callbacks are eager and need
             # to be processed first
-            if len(input_args) > 0 and input_args[0] in global_cb_map:
-                cb = global_cb_map[input_args[0]]
+            if len(input_args) > 0 and input_args[0] in cb_map:
+                cb = cb_map[input_args[0]]
                 args_return = cb.execute(self, input_args)
                 if args_return is not None:
                     input_args_deque.appendleft(list(args_return))
