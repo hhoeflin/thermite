@@ -140,22 +140,3 @@ def test_command_subcommands(
     else:
         command.process(input_args)
         assert set(command.subcommands.keys()) == set(subcommands)
-
-
-if __name__ == "__main__":
-    from examples import Aggregation, subcommands_function
-
-    # run(
-    #    subcommands_function,
-    #    name="With subcommand",
-    #    input_args=["--help"],
-    #    callbacks=[help_callback],
-    # )
-    run(
-        Aggregation,
-        name="Aggregation",
-        input_args=["--help"],
-        callbacks=[help_callback],
-        add_rich_exc_handler=False,
-        add_thermite_exc_handler=False,
-    )
