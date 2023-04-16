@@ -4,6 +4,7 @@ import pytest
 
 from thermite.callbacks import help_callback
 from thermite.command import Command
+from thermite.config import Config
 from thermite.exceptions import (
     ParameterError,
     TriggerError,
@@ -84,7 +85,7 @@ def test_command_process(
     output_args: Optional[Tuple[Any]],
     output_kwargs: Optional[Dict[str, Any]],
 ):
-    command = Command.from_obj(obj=obj, name="test")
+    command = Command.from_obj(obj=obj, name="test", config=Config())
 
     if process_exc is not None:
         with pytest.raises(process_exc):
@@ -128,7 +129,7 @@ def test_command_subcommands(
     process_exc: Optional[Type],
     subcommands: List[str],
 ):
-    command = Command.from_obj(obj=obj, name="test")
+    command = Command.from_obj(obj=obj, name="test", config=Config())
 
     if process_exc is not None:
         with pytest.raises(process_exc):

@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import inspect
 import sys
 import types
 from collections.abc import MutableMapping
 from inspect import Signature, classify_class_attrs
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
-    ClassVar,
     Dict,
     List,
     Optional,
@@ -17,10 +19,12 @@ from typing import (
 )
 
 from attrs import field, mutable
-from beartype.door import is_bearable
 
 from thermite.help import CbHelp, CommandHelp, extract_descriptions
 from thermite.utils import clify_argname
+
+if TYPE_CHECKING:
+    from . import config
 
 from .parameters import (
     Parameter,
@@ -30,7 +34,6 @@ from .parameters import (
     process_instance_to_param_group,
 )
 from .preprocessing import split_and_expand, undeque
-from .type_converters import CLIArgConverterStore
 
 
 class UnknownCommandError(Exception):
@@ -88,44 +91,6 @@ def extract_subcommands(
         return {}
 
 
-class CmdPostProcStore(MutableMapping):
-    def __init__(self, dict_update=None):
-        self.data = {}
-        if dict_update is not None:
-            for k, v in dict_update.items():
-                self[k] = v
-
-    @staticmethod
-    def _standardize(obj: Any) -> Any:
-        if inspect.isfunction(obj):
-            return obj
-        elif inspect.ismethod(obj):
-            return obj.__func__
-        elif isinstance(obj, type):
-            return obj
-        else:
-            return obj.__class__
-
-    def __getitem__(self, key) -> Callable[["Command"], "Command"]:
-        return self.data[self._standardize(key)]
-
-    def __setitem__(self, key, value: Callable[["Command"], "Command"]):
-        if not is_bearable(value, Callable[[Command], Command]):
-            raise ValueError(
-                "value has to be a function taking and returning a Command obj"
-            )
-        self.data[self._standardize(key)] = value
-
-    def __delitem__(self, key):
-        del self.data[self._standardize(key)]
-
-    def __len__(self) -> int:
-        return len(self.data)
-
-    def __iter__(self):
-        return iter(self.data)
-
-
 def cb_list_to_trigger_map(cb_list: List[Callback]):
     res = {}
     for cb in cb_list:
@@ -139,14 +104,10 @@ def cb_list_to_trigger_map(cb_list: List[Callback]):
 class Command(MutableMapping):
     param_group: ParameterGroup
     subcommands: Dict[str, Subcommand]
+    config: "config.Config"
     prev_cmd: Optional["Command"] = None
 
     local_callbacks: List[Callback] = field(factory=list)
-    global_callbacks: ClassVar[List[Callback]] = []
-    cli_args_store: ClassVar[CLIArgConverterStore] = CLIArgConverterStore(
-        add_defaults=True
-    )
-    cmd_post_proc_store: ClassVar[CmdPostProcStore] = CmdPostProcStore()
 
     def __attrs_post_init__(self):
         if len(self.param_group.cli_args) > 0 and len(self.subcommands) > 0:
@@ -168,46 +129,49 @@ class Command(MutableMapping):
         return self.param_group.__iter__()
 
     @classmethod
-    def _from_function(cls, func: Callable, name: str):
+    def _from_function(cls, func: Callable, name: str, config: "config.Config"):
         param_group = process_function_to_param_group(
-            func, store=cls.cli_args_store, name=name, child_prefix_omit_name=True
+            func, store=config.cli_args_store, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
+            config=config,
             subcommands=extract_subcommands(param_group._expected_ret_type),
         )
 
     @classmethod
-    def _from_instance(cls, obj: Any, name: str):
+    def _from_instance(cls, obj: Any, name: str, config: "config.Config"):
         param_group = process_instance_to_param_group(
             obj, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
+            config=config,
             subcommands=extract_subcommands(obj.__class__),
         )
 
     @classmethod
-    def _from_class(cls, klass: Type, name: str):
+    def _from_class(cls, klass: Type, name: str, config: "config.Config"):
         param_group = process_class_to_param_group(
-            klass, store=cls.cli_args_store, name=name, child_prefix_omit_name=True
+            klass, store=config.cli_args_store, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
+            config=config,
             subcommands=extract_subcommands(klass),
         )
 
     @classmethod
-    def from_obj(cls, obj: Any, name: str):
+    def from_obj(cls, obj: Any, name: str, config: "config.Config"):
         if inspect.isfunction(obj) or inspect.ismethod(obj):
-            res = cls._from_function(func=obj, name=name)
+            res = cls._from_function(func=obj, name=name, config=config)
         elif inspect.isclass(obj):
-            res = cls._from_class(obj, name=name)
+            res = cls._from_class(obj, name=name, config=config)
         else:
             raise NotImplementedError()
 
-        if obj in cls.cmd_post_proc:
-            return cls.cmd_post_proc[obj](res)
+        if obj in config.cmd_post_proc_store:
+            return config.cmd_post_proc_store[obj](res)
         else:
             return res
 
@@ -215,7 +179,7 @@ class Command(MutableMapping):
         input_args_deque = split_and_expand(args)
 
         cb_map = dict(
-            **cb_list_to_trigger_map(self.global_callbacks),
+            **cb_list_to_trigger_map(self.config.callbacks),
             **cb_list_to_trigger_map(self.local_callbacks),
         )
 
@@ -252,10 +216,12 @@ class Command(MutableMapping):
             subcmd = self.subcommands[name]
             if subcmd.attr_name != "":
                 subcommand = self.from_obj(
-                    getattr(res_obj, subcmd.attr_name), name=name
+                    getattr(res_obj, subcmd.attr_name), name=name, config=self.config
                 )
             else:
-                subcommand = self.from_obj(getattr(res_obj, "__call__"), name=name)
+                subcommand = self.from_obj(
+                    getattr(res_obj, "__call__"), name=name, config=self.config
+                )
             subcommand.prev_cmd = self
 
             return subcommand
@@ -280,7 +246,7 @@ class Command(MutableMapping):
     def help(self) -> CommandHelp:
         # argument help to show
         args = [x.help() for x in self.param_group.cli_args]
-        cbs = [x.help() for x in self.global_callbacks]
+        cbs = [x.help() for x in self.config.callbacks + self.local_callbacks]
 
         # the options don't need a special name or description;
         # that is intended for subgroups

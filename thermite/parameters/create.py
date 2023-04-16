@@ -268,10 +268,10 @@ def process_instance_to_param_group(
     else:
         short_description = None
 
-    # the signature has self at the beginning that we need to ignore
+    # as it is an instance, there are no things to call
     param_group = ParameterGroup(
         descr=short_description,
-        obj=obj,
+        obj=lambda: obj,
         expected_ret_type=obj.__class__,
         name=name,
         child_prefix_omit_name=child_prefix_omit_name,
