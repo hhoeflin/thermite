@@ -12,11 +12,16 @@ from typing import (
     Tuple,
     Type,
     Union,
+    final,
     get_args,
     get_origin,
 )
 
 from attrs import field, mutable
+
+
+class TooFewArgsError(Exception):
+    ...
 
 
 class TooManyArgsError(Exception):
@@ -35,29 +40,57 @@ class RebindingError(Exception):
     ...
 
 
-class TooFewArgsError(Exception):
-    ...
-
-
 class CLIArgConverterError(Exception):
     ...
 
 
-@mutable()
-class NumReqArgs:
-    min: int
-    max: int
+def args_used(num_offered: int, num_req: Union[int, slice]) -> int:
+    if isinstance(num_req, int):
+        if num_req <= num_offered:
+            return num_req
+        else:
+            raise TooFewArgsError(
+                f"Required {str(num_req)} but was offered {str(num_offered)}"
+            )
+    else:
+        # it is a slice
+        num_req_min = min(0, num_req.start) if num_req.start is not None else 0
+        num_req_step: int = 1 if num_req.step is None else num_req.step
+        num_req_max: int = (
+            num_req.stop - num_req_step if num_req.stop is not None else None
+        )
+        if num_req_step < 1:
+            raise ValueError(
+                f"Step in slice has to be positive but was {str(slice.step)}"
+            )
+
+        if num_offered < num_req_min:
+            raise TooFewArgsError(
+                f"Required {num_req_min} but got {num_offered} arguments."
+            )
+
+        num_surplus = num_offered - num_req_min
+        num_surplus_used = num_surplus // num_req_step
+
+        num_used = num_req_min + num_surplus_used
+
+        if num_req_max is not None and num_used >= num_req_max:
+            num_used = num_req_max
+
+        return num_used
+
+
+def check_correct_nargs(num_offered: int, num_req: Union[int, slice]) -> None:
+    num_used = args_used(num_offered, num_req)
+
+    if num_used < num_offered:
+        raise TooManyArgsError(
+            f"Required {str(num_req)} but was offered {str(num_offered)}"
+        )
 
 
 class CLIArgConverterBase(ABC):
-    @property
-    @abstractmethod
-    def num_required_args(self) -> NumReqArgs:
-        ...
-
-    @abstractmethod
-    def num_requested_args(self, num_offered_args: int) -> int:
-        ...
+    num_req_args: Union[int, slice] = field(init=False)
 
     @property
     @abstractmethod
@@ -65,8 +98,17 @@ class CLIArgConverterBase(ABC):
         ...
 
     @abstractmethod
-    def convert(self, args: Sequence[str]) -> Any:
+    def _convert(self, args: Sequence[str]) -> Any:
         ...
+
+    @final
+    def convert(self, args: Sequence[str]) -> Any:
+        check_correct_nargs(len(args), self.num_req_args)
+        return self._convert(args)
+
+    @final
+    def num_requested_args(self, num_offered_args: int) -> int:
+        return args_used(num_offered_args, self.num_req_args)
 
 
 @mutable(slots=False)
@@ -80,6 +122,7 @@ class BasicCLIArgConverter(CLIArgConverterSimple):
     _bound_arg: Optional[str] = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
+        self.num_req_args = 1
         if self._target_type != self._supported_type:
             raise TypeError(
                 f"{str(self._target_type)} not same as "
@@ -87,19 +130,10 @@ class BasicCLIArgConverter(CLIArgConverterSimple):
             )
 
     @property
-    def num_required_args(self) -> NumReqArgs:
-        return NumReqArgs(1, 1)
-
-    def num_requested_args(self, num_offered_args: int) -> int:
-        if num_offered_args < 1:
-            raise TooFewArgsError("Require at least 1 argument")
-        return 1
-
-    @property
     def target_type(self) -> Type:
         return self._target_type
 
-    def convert(self, args: Sequence[str]) -> Any:
+    def _convert(self, args: Sequence[str]) -> Any:
         return self._target_type(*args)
 
 
@@ -127,11 +161,13 @@ class IntCLIArgConverter(BasicCLIArgConverter):
     _target_type: Type = int
 
 
+# TODO: Should the next classes have base BasicCLIArgConverter?
 @mutable(slots=False)
 class LiteralCLIArgConverter(BasicCLIArgConverter):
     _args_mapper: Dict[str, Any] = field(factory=dict, init=False)
 
     def __attrs_post_init__(self) -> None:
+        self.num_req_args = 1
         if not get_origin(self._target_type) == get_origin(Literal["a", "b"]):
             raise TypeError(f"{str(self._target_type)} is not of type 'Literal'")
         literal_args = get_args(self._target_type)
@@ -143,12 +179,7 @@ class LiteralCLIArgConverter(BasicCLIArgConverter):
                 "when converted to string."
             )
 
-    def convert(self, args: Sequence[str]) -> Any:
-        if len(args) > 1:
-            raise TooManyArgsError()
-        elif len(args) == 0:
-            raise TooFewArgsError()
-
+    def _convert(self, args: Sequence[str]) -> Any:
         if args[0] in self._args_mapper:
             return self._args_mapper[args[0]]
         else:
@@ -160,16 +191,12 @@ class EnumCLIArgConverter(BasicCLIArgConverter):
     _args_mapper: Dict[str, Any] = field(factory=dict, init=False)
 
     def __attrs_post_init__(self) -> None:
+        self.num_req_args = 1
         if not issubclass(self._target_type, Enum):
             raise TypeError(f"{str(self._target_type)} is not an Enum")
         self._args_mapper = {e.name: e for e in self._target_type}
 
-    def convert(self, args: Sequence[str]) -> Any:
-        if len(args) > 1:
-            raise TooManyArgsError()
-        elif len(args) == 0:
-            raise TooFewArgsError()
-
+    def _convert(self, args: Sequence[str]) -> Any:
         if args[0] in self._args_mapper:
             return self._args_mapper[args[0]]
         else:
@@ -179,15 +206,11 @@ class EnumCLIArgConverter(BasicCLIArgConverter):
 @mutable(slots=False)
 class BoolCLIArgConverter(BasicCLIArgConverter):
     def __attrs_post_init__(self) -> None:
+        self.num_req_args = 1
         if self._target_type != bool:
             raise TypeError(f"{str(self._target_type)} is not a boolean")
 
-    def convert(self, args: Sequence[str]) -> Any:
-        if len(args) > 1:
-            raise TooManyArgsError()
-        elif len(args) == 0:
-            raise TooFewArgsError()
-
+    def _convert(self, args: Sequence[str]) -> Any:
         if args[0].lower() in ("true", "t", "yes"):
             return True
         elif args[0].lower() in ("false", "f", "no"):
@@ -271,7 +294,6 @@ class CLIArgConverterStore:
 class UnionCLIArgConverter(CLIArgConverterCompound):
     _bound_args: List[str] = field(factory=list, init=False)
     _converters: List[CLIArgConverterBase] = field(factory=list)
-    _num_required_args: NumReqArgs = field(default=NumReqArgs(0, 0), init=False)
 
     @classmethod
     def from_store(cls, target_type: Type, store: "CLIArgConverterStore"):
@@ -284,30 +306,19 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
 
     def __attrs_post_init__(self) -> None:
         # ensure that all converters require the same number of arguments
-        self._num_required_args = self._converters[0].num_required_args
+        self.num_req_args = self._converters[0].num_req_args
         for converter in self._converters:
-            if converter.num_required_args != self._num_required_args:
+            if converter.num_req_args != self.num_req_args:
                 raise UnequalNumberArgsError(
                     "Number of required arguments for all types of"
                     " a Union has to be equal"
                 )
 
     @property
-    def num_required_args(self) -> NumReqArgs:
-        return self._num_required_args
-
-    def num_requested_args(self, num_offered_args: int) -> int:
-        return self._converters[0].num_requested_args(num_offered_args)
-
-    @property
     def target_type(self) -> Type:
         return self._target_type
 
-    def convert(self, args: Sequence[str]) -> Any:
-        if len(args) > self.num_required_args.max:
-            raise TooManyArgsError()
-        elif len(args) < self.num_required_args.min:
-            raise TooFewArgsError()
+    def _convert(self, args: Sequence[str]) -> Any:
         for converter in self._converters:
             try:
                 return converter.convert(args)
@@ -332,30 +343,24 @@ class ListCLIArgConverter(CLIArgConverterCompound):
             pass
         elif len(type_args) == 1:
             inner_converter = store.get_converter(type_args[0])
-            inner_num_args = inner_converter.num_required_args
-            if inner_num_args.min != inner_num_args.max:
-                raise TypeError("Inner type can't have variable number of args")
         else:
             raise TypeError("Inner type has several arguments.")
 
         return cls(target_type=target_type, inner_converter=inner_converter)
 
-    @property
-    def num_required_args(self) -> NumReqArgs:
-        return NumReqArgs(self._inner_converter.num_required_args.min, -1)
-
-    def num_requested_args(self, num_offered_args: int) -> int:
-        inner_num_args = self._inner_converter.num_required_args.min
-        if num_offered_args < inner_num_args:
-            raise TooFewArgsError(f"Require at least {inner_num_args} arguments")
-        return int(int(num_offered_args) / int(inner_num_args) * int(inner_num_args))
+    def __attrs_post_init__(self) -> None:
+        # ensure that all converters require the same number of arguments
+        inner_num_args = self._inner_converter.num_req_args
+        if not isinstance(inner_num_args, int):
+            raise TypeError("Inner type can't have variable number of args")
+        self.num_req_args = slice(0, None, inner_num_args)
 
     @property
     def target_type(self) -> Type:
         return self._target_type
 
-    def convert(self, args: Sequence[str]) -> Any:
-        req_group_args = self._inner_converter.num_required_args.min
+    def _convert(self, args: Sequence[str]) -> Any:
+        req_group_args = self.num_req_args.step  # type: ignore
         num_groups = len(args) // req_group_args
         num_args = num_groups * req_group_args
         if len(args) > num_args:
@@ -381,44 +386,29 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
         tuple_converters = []
         for type_arg in type_args:
             tuple_converters.append(store.get_converter(type_arg))
-        # ensure that all of them have finite number of required args
-        for converter in tuple_converters:
-            if converter.num_required_args.max == -1:
-                raise CLIArgConverterError(
-                    "A list is not allowed to be part of a tuple."
-                )
-            if converter.num_required_args.min != converter.num_required_args.max:
-                raise CLIArgConverterError(
-                    "Type in a tuple has to have a constant number of arguments."
-                )
         return cls(target_type=target_type, tuple_converters=tuple_converters)
 
-    @property
-    def num_required_args(self) -> NumReqArgs:
-        num_args = sum([x.num_required_args.min for x in self._tuple_converters])
-
-        return NumReqArgs(num_args, num_args)
-
-    def num_requested_args(self, num_offered_args: int) -> int:
-        if num_offered_args < self.num_required_args.min:
-            raise TooFewArgsError(
-                "Require at least {self.num_requested_args.min} argument"
-            )
-        return self.num_required_args.min
+    def __attrs_post_init__(self) -> None:
+        # ensure that all of them have finite number of required args
+        self.num_req_args = 0
+        for converter in self._tuple_converters:
+            if not isinstance(converter.num_req_args, int):
+                raise CLIArgConverterError(
+                    "Each type as part of a tuple has to have "
+                    "constant number of arguments."
+                )
+            self.num_req_args += converter.num_req_args
 
     @property
     def target_type(self) -> Type:
         return self._target_type
 
-    def convert(self, args: Sequence[str]) -> Any:
-        if len(args) > self.num_required_args.max:
-            raise TooManyArgsError()
-        elif len(args) < self.num_required_args.min:
-            raise TooFewArgsError()
+    def _convert(self, args: Sequence[str]) -> Any:
         tuple_out = []
         pos = 0
         for converter in self._tuple_converters:
-            tuple_args = args[pos : (pos + converter.num_required_args.min)]
-            pos = pos + converter.num_required_args.min
+            assert isinstance(converter.num_req_args, int)
+            tuple_args = args[pos : (pos + converter.num_req_args)]
+            pos = pos + converter.num_req_args
             tuple_out.append(converter.convert(tuple_args))
         return tuple(tuple_out)

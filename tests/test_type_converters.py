@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import Any, List, Literal, Sequence, Tuple, Type, Union
+from typing import Any, List, Literal, Tuple, Type, Union
 
 import pytest
 
@@ -38,9 +38,9 @@ args_tests = [  # type: ignore
     (Tuple[int, str], ["2", "yes"], (2, "yes"), 2),
     (Tuple[int, str], ["a", "yes"], None, 2),
     (Tuple[int, str], ["a"], None, 2),
-    (List[int], ["1", "2"], [1, 2], -1),
-    (List[int], [], [], -1),
-    (List[int], ["a", "2"], None, -1),
+    (List[int], ["1", "2"], [1, 2], slice(0, None, 1)),
+    (List[int], [], [], slice(0, None, 1)),
+    (List[int], ["a", "2"], None, slice(0, None, 1)),
 ]
 
 
@@ -53,7 +53,7 @@ def test_store(
     nargs: int,
 ):
     converter = store.get_converter(target_type)
-    assert converter.num_required_args.max == nargs
+    assert converter.num_req_args == nargs
     if expected is not None:
         res = converter.convert(args)
         assert res == expected

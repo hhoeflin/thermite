@@ -1,5 +1,6 @@
 import inspect
-from collections.abc import MutableMapping, abstractmethod
+from abc import abstractmethod
+from collections.abc import MutableMapping
 from functools import partial
 from typing import Any, Callable, Generic, List, TypeVar
 
@@ -56,6 +57,11 @@ class ThermiteStore(MutableMapping, Generic[VT]):
 
     def __iter__(self):
         return iter(self.data)
+
+
+@mutable
+class Signature:
+    ...
 
 
 @mutable

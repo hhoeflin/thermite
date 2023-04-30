@@ -131,7 +131,7 @@ class Command(MutableMapping):
     @classmethod
     def _from_function(cls, func: Callable, name: str, config: "config.Config"):
         param_group = process_function_to_param_group(
-            func, store=config.cli_args_store, name=name, child_prefix_omit_name=True
+            func, store=config.stores.cli_args, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
@@ -153,7 +153,7 @@ class Command(MutableMapping):
     @classmethod
     def _from_class(cls, klass: Type, name: str, config: "config.Config"):
         param_group = process_class_to_param_group(
-            klass, store=config.cli_args_store, name=name, child_prefix_omit_name=True
+            klass, store=config.stores.cli_args, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
@@ -170,8 +170,8 @@ class Command(MutableMapping):
         else:
             raise NotImplementedError()
 
-        if obj in config.cmd_post_proc_store:
-            return config.cmd_post_proc_store[obj](res)
+        if obj in config.stores.cmd_post_process:
+            return config.stores.cmd_post_process[obj](res)
         else:
             return res
 
