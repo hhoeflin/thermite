@@ -19,12 +19,11 @@ from thermite.help import extract_descriptions
 from thermite.type_converters import CLIArgConverterStore
 from thermite.utils import clean_type_str, clify_argname
 
-from .base import Argument, Option, Parameter
+from .base import Option, Parameter
 from .group import ParameterGroup
 from .processors import (
     ConstantTriggerProcessor,
     ConvertListTriggerProcessor,
-    ConvertOnceTriggerProcessor,
     ConvertReplaceTriggerProcessor,
 )
 

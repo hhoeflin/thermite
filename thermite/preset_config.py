@@ -7,13 +7,17 @@ import attrs
 
 @attrs.mutable
 class PresetConfig:
+    """Stores commands, options and arguments to use."""
+
     args: Optional[List[str]] = None
     opts: Optional[List[List[str]]] = None
     cmds: Optional[Dict[str, "PresetConfig"]] = None
 
 
 @attrs.mutable
-class ConverterSetup:
+class PresetConfigConverter:
+    """Converter using CAttrs to read PresetConfig from json/yaml."""
+
     converter: Any
 
     def __attrs_post_init__(self):
@@ -52,7 +56,9 @@ def read_preset_config(file: Path):
     if file.suffix.lower() in [".json"]:
         import cattrs.preconf.json as cjson
 
-        json_converter = ConverterSetup(cjson.make_converter(forbid_extra_keys=True))
+        json_converter = PresetConfigConverter(
+            cjson.make_converter(forbid_extra_keys=True)
+        )
         preset_conf = json_converter.structure(
             json.loads(file.read_text()), Union[Dict[str, PresetConfig], PresetConfig]
         )
@@ -60,7 +66,9 @@ def read_preset_config(file: Path):
     if file.suffix.lower() in [".yaml", "yml"]:
         import cattrs.preconf.pyyaml as cpyyaml
 
-        yaml_converter = ConverterSetup(cpyyaml.make_converter(forbid_extra_keys=True))
+        yaml_converter = PresetConfigConverter(
+            cpyyaml.make_converter(forbid_extra_keys=True)
+        )
         try:
             import yaml as pyyaml
 

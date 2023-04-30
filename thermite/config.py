@@ -1,16 +1,30 @@
 import inspect
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, abstractmethod
 from functools import partial
-from typing import Any, Callable, List
+from typing import Any, Callable, Generic, List, TypeVar
 
 from attrs import Factory, field, mutable
 from beartype.door import is_bearable
 
 from .command import Callback, Command
+from .parameters import ParameterGroup
 from .type_converters import CLIArgConverterStore
 
 
-class CmdPostProcStore(MutableMapping):
+class CmdPostProc:
+    @abstractmethod
+    def post_process(self, cmd: Command):
+        pass
+
+    @abstractmethod
+    def subcommand(self, cmd: Command):
+        pass
+
+
+VT = TypeVar("VT")
+
+
+class ThermiteStore(MutableMapping, Generic[VT]):
     def __init__(self, dict_update=None):
         self.data = {}
         if dict_update is not None:
@@ -28,14 +42,10 @@ class CmdPostProcStore(MutableMapping):
         else:
             return obj.__class__
 
-    def __getitem__(self, key) -> Callable[["Command"], "Command"]:
+    def __getitem__(self, key) -> VT:
         return self.data[self._standardize(key)]
 
-    def __setitem__(self, key, value: Callable[["Command"], "Command"]):
-        if not is_bearable(value, Callable[[Command], Command]):
-            raise ValueError(
-                "value has to be a function taking and returning a Command obj"
-            )
+    def __setitem__(self, key, value: VT):
         self.data[self._standardize(key)] = value
 
     def __delitem__(self, key):
@@ -49,9 +59,23 @@ class CmdPostProcStore(MutableMapping):
 
 
 @mutable
-class Config:
-    callbacks: List[Callback] = field(factory=list)
-    cli_args_store: CLIArgConverterStore = field(
+class ConfigStores:
+    cli_args: CLIArgConverterStore = field(
         factory=partial(CLIArgConverterStore, add_defaults=True)
     )
-    cmd_post_proc_store: CmdPostProcStore = field(factory=CmdPostProcStore)
+    sig_extract: ThermiteStore[Callable[[Signature], Signature]] = field(
+        factory=ThermiteStore
+    )
+    cmd_post_create: ThermiteStore[Callable[[Command], Command]] = field(
+        factory=ThermiteStore
+    )
+    cmd_post_process: ThermiteStore[CmdPostProc] = field(factory=ThermiteStore)
+    pg_post_create: ThermiteStore[Callable[[ParameterGroup], ParameterGroup]] = field(
+        factory=ThermiteStore
+    )
+
+
+@mutable
+class Config:
+    callbacks: List[Callback] = field(factory=list)
+    stores: ConfigStores = field(factory=ConfigStores)
