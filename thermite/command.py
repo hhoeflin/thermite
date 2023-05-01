@@ -43,7 +43,7 @@ class UnknownCommandError(Exception):
 
 
 @mutable
-class Callback:
+class CliCallback:
     callback: Callable[["Command"], None]
     triggers: List[str]
     descr: str
@@ -96,7 +96,7 @@ def extract_subcommands(
         return {}
 
 
-def cb_list_to_trigger_map(cb_list: List[Callback]):
+def cb_list_to_trigger_map(cb_list: List[CliCallback]):
     res = {}
     for cb in cb_list:
         for trigger in cb.triggers:
@@ -112,7 +112,7 @@ class Command(MutableMapping):
     config: "config.Config"
     prev_cmd: Optional["Command"] = None
 
-    local_callbacks: List[Callback] = field(factory=list)
+    local_cli_callbacks: List[CliCallback] = field(factory=list)
 
     _history: List[str] = field(init=False, factory=list)
 
@@ -188,17 +188,14 @@ class Command(MutableMapping):
         else:
             raise NotImplementedError()
 
-        if obj in config.stores.cmd_post_process:
-            return config.stores.cmd_post_process[obj](res)
-        else:
-            return res
+        return res
 
     def process(self, args: Sequence[str]) -> List[str]:
         input_args_deque = split_and_expand(args)
 
         cb_map = dict(
-            **cb_list_to_trigger_map(self.config.callbacks),
-            **cb_list_to_trigger_map(self.local_callbacks),
+            **cb_list_to_trigger_map(self.config.callbacks.cli),
+            **cb_list_to_trigger_map(self.local_cli_callbacks),
         )
 
         while len(input_args_deque) > 0:
@@ -270,7 +267,7 @@ class Command(MutableMapping):
     def help(self) -> CommandHelp:
         # argument help to show
         args = [x.help() for x in self.param_group.cli_args]
-        cbs = [x.help() for x in self.config.callbacks + self.local_callbacks]
+        cbs = [x.help() for x in self.config.callbacks.cli + self.local_cli_callbacks]
 
         # the options don't need a special name or description;
         # that is intended for subgroups

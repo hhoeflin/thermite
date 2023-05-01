@@ -1,3 +1,4 @@
+import enum
 import inspect
 from typing import (
     Any,
@@ -13,7 +14,9 @@ from typing import (
     get_origin,
 )
 
+from attrs import mutable
 from docstring_parser import parse
+from loguru import logger
 
 from thermite.help import extract_descriptions
 from thermite.type_converters import CLIArgConverterStore
@@ -26,6 +29,142 @@ from .processors import (
     ConvertListTriggerProcessor,
     ConvertReplaceTriggerProcessor,
 )
+
+
+class CliParamKind(enum.Enum):
+    option = "option"
+    argument = "argument"
+
+
+@mutable
+class SignatureParameter:
+    name: str
+    python_kind: inspect.Parameter
+    cli_kind: CliParamKind
+    descr: str
+    default: Any
+    annot: Type
+
+    def create(self, store: CLIArgConverterStore) -> Union[Parameter, ParameterGroup]:
+        """
+        Process a function parameter into a thermite parameter
+        """
+        # find the right type converter
+        # if no type annotations, it is assumed it is str
+        if self.annot != inspect.Parameter.empty:
+            annot_to_use: Type = self.annot
+        else:
+            annot_to_use = str
+
+        # get default value
+        if self.default == inspect.Parameter.empty:
+            default_val = ...
+        else:
+            default_val = self.default
+
+        res: Union[Parameter, ParameterGroup]
+
+        if self.python_kind == inspect.Parameter.VAR_POSITIONAL:
+            # argument list
+            # the converter needs to be changed; the type annotation is per item,
+            # not for the whole list
+            annot_to_use = List[annot_to_use]  # type: ignore
+            conv = store.get_converter(annot_to_use)
+            res = Option(
+                name=self.name,
+                descr=self.descr,
+                default_value=default_val,
+                processors=[
+                    ConvertListTriggerProcessor(
+                        triggers=[f"--{clify_argname(self.name)}"],
+                        type_converter=conv,
+                        type_str=clean_type_str(annot_to_use),
+                    )
+                ],
+            )
+        elif self.python_kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+            inspect.Parameter.POSITIONAL_ONLY,
+        ):
+            if annot_to_use == bool:
+                # need to use a bool-option
+                res = bool_option(
+                    name=self.name,
+                    default_value=default_val,
+                    descr=self.descr,
+                    pos_triggers=[f"--{clify_argname(self.name)}"],
+                    neg_triggers=[f"--no-{clify_argname(self.name)}"],
+                )
+            elif get_origin(annot_to_use) in (List, list, Sequence):
+                annot_args = get_args(annot_to_use)
+                if len(annot_args) == 0:
+                    inner_type = str
+                elif len(annot_args) == 1:
+                    inner_type = annot_args[0]
+                else:
+                    raise TypeError(f"{str(annot_to_use)} has more than 1 argument.")
+                conv = store.get_converter(inner_type)
+                res = Option(
+                    name=self.name,
+                    descr=self.descr,
+                    default_value=default_val,
+                    processors=[
+                        ConvertListTriggerProcessor(
+                            triggers=[f"--{clify_argname(self.name)}"],
+                            type_converter=conv,
+                            type_str=clean_type_str(annot_to_use),
+                        )
+                    ],
+                )
+            else:
+                try:
+                    conv = store.get_converter(annot_to_use)
+                    res = Option(
+                        name=self.name,
+                        descr=self.descr,
+                        default_value=default_val,
+                        processors=[
+                            ConvertReplaceTriggerProcessor(
+                                triggers=[f"--{clify_argname(self.name)}"],
+                                type_converter=conv,
+                                type_str=clean_type_str(annot_to_use),
+                            )
+                        ],
+                    )
+                except TypeError:
+                    # see if this could be done using a class option group
+                    if inspect.isclass(annot_to_use):
+                        res = process_class_to_param_group(
+                            klass=annot_to_use,
+                            store=store,
+                            name=self.name,
+                            child_prefix_omit_name=False,
+                        )
+                        res.default_value = default_val
+                    else:
+                        raise
+        elif self.python_kind == inspect.Parameter.VAR_KEYWORD:
+            # not yet a solution; should allow to pass any option
+            raise NotImplementedError("VAR_KEYWORDS not yet supported")
+        else:
+            raise Exception(f"Unknown value for kind: {self.python_kind}")
+
+        if self.cli_kind == CliParamKind.argument:
+            if isinstance(res, Option):
+                res = res.to_argument()
+            elif isinstance(res, ParameterGroup):
+                raise Exception("Can't convert ParamGroup to Argument")
+
+        return res
+
+
+@mutable
+class Signature:
+    short_descr: str
+    long_descr: str
+    params: Dict[str, SignatureParameter]
+    return_annot: Type
 
 
 def bool_option(

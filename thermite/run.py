@@ -7,8 +7,9 @@ from attrs import mutable
 
 from thermite.exceptions import RichExcHandler, ThermiteExcHandler
 
-from .callbacks import Callback, help_callback
+from .callbacks import CliCallback, help_callback
 from .command import Command
+from .config import Config
 from .exceptions import CommandError, ParameterError
 from .type_converters import CLIArgConverterStore
 
@@ -38,8 +39,7 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
 
 def run(
     obj: Any,
-    store: Optional[CLIArgConverterStore] = None,
-    callbacks: Optional[List[Callback]] = None,
+    config: Optional[Config] = None,
     add_help_cb: bool = True,
     exception_handlers: Optional[
         List[Callable[[Exception], Optional[Exception]]]
@@ -49,14 +49,11 @@ def run(
     add_thermite_exc_handler: bool = True,
     add_rich_exc_handler: bool = True,
 ) -> Any:
-    if store is not None:
-        Command.store = store
+    if config is None:
+        config = Config()
 
-    if callbacks is None:
-        callbacks = []
     if add_help_cb:
-        callbacks.append(help_callback)
-    Command.global_callbacks = callbacks
+        config.add_cli_callback(help_callback)
 
     if exception_handlers is None:
         exception_handlers = []
@@ -66,7 +63,7 @@ def run(
         exception_handlers.append(RichExcHandler())
 
     try:
-        cmd = Command.from_obj(obj, name=name)
+        cmd = Command.from_obj(obj, name=name, config=config)
         return process_all_args(input_args=input_args, cmd=cmd)
     except Exception as input_e:
         # run through all exception handlers in order
@@ -95,9 +92,8 @@ class RunOutput:
 def testing_runner(
     obj: Any,
     input_args: List[str],
+    config: Optional[Config] = None,
     name: Optional[str] = None,
-    store: Optional[CLIArgConverterStore] = None,
-    callbacks: Optional[List[Callback]] = None,
     exception_handlers: Optional[
         List[Callable[[Exception], Optional[Exception]]]
     ] = None,
@@ -113,8 +109,7 @@ def testing_runner(
         ) as rout, contextlib.redirect_stderr(io.StringIO()) as rerr:
             run(
                 obj=obj,
-                store=store,
-                callbacks=callbacks,
+                config=config,
                 exception_handlers=exception_handlers,
                 input_args=input_args,
                 add_thermite_exc_handler=add_thermite_exc_handler,
