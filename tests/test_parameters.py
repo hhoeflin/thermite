@@ -1,8 +1,9 @@
+import inspect
 from pathlib import Path
 from typing import List, Tuple
 
 import pytest
-from attrs import mutable
+from attrs import asdict, mutable
 
 from thermite.exceptions import ParameterError, TriggerError, UnspecifiedOptionError
 from thermite.parameters import (
@@ -17,6 +18,7 @@ from thermite.parameters import (
     bool_option,
     process_class_to_param_group,
 )
+from thermite.signatures import CliParamKind, ParameterSignature
 from thermite.type_converters import (
     CLIArgConverterStore,
     PathCLIArgConverter,
@@ -88,12 +90,17 @@ class TestBoolOption:
         """Test that BoolOption works as expected."""
 
         opt = bool_option(
-            name="a",
-            descr="test",
+            ParameterSignature(
+                name="a",
+                python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                cli_kind=CliParamKind.option,
+                descr="test",
+                default_value=...,
+                annot=bool,
+            ),
             pos_triggers=pos_triggers,
             neg_triggers=neg_triggers,
             prefix=prefix,
-            default_value=...,
         )
         if type(val_exp) == type and issubclass(val_exp, Exception):
             # raises an error
@@ -106,11 +113,16 @@ class TestBoolOption:
 
     def test_unused(self):
         opt = bool_option(
-            name="a",
-            descr="test",
+            ParameterSignature(
+                name="a",
+                python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                cli_kind=CliParamKind.option,
+                descr="test",
+                default_value=...,
+                annot=bool,
+            ),
             pos_triggers=("-a",),
             neg_triggers=(),
-            default_value=...,
             prefix="",
         )
         with pytest.raises(ParameterError):
@@ -118,11 +130,16 @@ class TestBoolOption:
 
     def test_too_few_args(self):
         opt = bool_option(
-            name="a",
-            descr="test",
+            ParameterSignature(
+                name="a",
+                python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                cli_kind=CliParamKind.option,
+                descr="test",
+                default_value=...,
+                annot=bool,
+            ),
             pos_triggers=("-a",),
             neg_triggers=(),
-            default_value=...,
             prefix="",
         )
         with pytest.raises(TriggerError):
@@ -130,11 +147,16 @@ class TestBoolOption:
 
     def test_multiple_bind(self):
         opt = bool_option(
-            name="a",
-            descr="test",
+            ParameterSignature(
+                name="a",
+                python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                cli_kind=CliParamKind.option,
+                descr="test",
+                default_value=...,
+                annot=bool,
+            ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            default_value=...,
             prefix="",
         )
         opt.process(["--yes"])
@@ -145,33 +167,48 @@ class TestBoolOption:
 
     def test_isinstance_option(self):
         opt = bool_option(
-            name="a",
-            descr="test",
+            ParameterSignature(
+                name="a",
+                python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                cli_kind=CliParamKind.option,
+                descr="test",
+                default_value=...,
+                annot=bool,
+            ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            default_value=...,
             prefix="",
         )
         assert isinstance(opt, Option)
 
     def test_isinstance_parameter(self):
         opt = bool_option(
-            name="a",
-            descr="test",
+            ParameterSignature(
+                name="a",
+                python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                cli_kind=CliParamKind.option,
+                descr="test",
+                default_value=...,
+                annot=bool,
+            ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            default_value=...,
             prefix="",
         )
         assert isinstance(opt, Parameter)
 
     def test_convert_argument(self):
         opt = bool_option(
-            name="a",
-            descr="test",
+            ParameterSignature(
+                name="a",
+                python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                cli_kind=CliParamKind.option,
+                descr="test",
+                default_value=...,
+                annot=bool,
+            ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            default_value=...,
             prefix="",
         )
         with pytest.raises(Exception, match="Can't convert option to argument"):
@@ -223,9 +260,16 @@ class TestOption:
         """Test that BoolOption works as expected."""
 
         opt = Option(
-            name="a",
-            descr="Path option",
-            default_value=...,
+            **asdict(
+                ParameterSignature(
+                    name="a",
+                    python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    cli_kind=CliParamKind.option,
+                    descr="Path option",
+                    default_value=...,
+                    annot=Path,
+                )
+            ),
             processors=[
                 ConvertOnceTriggerProcessor(
                     triggers=triggers,
@@ -246,9 +290,16 @@ class TestOption:
 
     def test_too_few_args(self):
         opt = Option(
-            name="a",
-            descr="Path option",
-            default_value=[],
+            **asdict(
+                ParameterSignature(
+                    name="a",
+                    python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    cli_kind=CliParamKind.option,
+                    descr="Path option",
+                    default_value=[],
+                    annot=Path,
+                )
+            ),
             processors=[
                 ConvertOnceTriggerProcessor(
                     triggers=("--path", "-p"),
@@ -263,9 +314,16 @@ class TestOption:
 
     def test_path_opt_multi(self, store):
         opt = Option(
-            name="a",
-            descr="Path option",
-            default_value=[],
+            **asdict(
+                ParameterSignature(
+                    name="a",
+                    python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    cli_kind=CliParamKind.option,
+                    descr="Path option",
+                    default_value=[],
+                    annot=Path,
+                )
+            ),
             processors=[
                 ConvertListTriggerProcessor(
                     triggers=("--path", "-p"),
@@ -280,9 +338,16 @@ class TestOption:
 
     def test_path_to_argument(self, store):
         opt = Option(
-            name="a",
-            descr="Path option",
-            default_value=[],
+            **asdict(
+                ParameterSignature(
+                    name="a",
+                    python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    cli_kind=CliParamKind.option,
+                    descr="Path option",
+                    default_value=[],
+                    annot=Path,
+                )
+            ),
             processors=[
                 ConvertListTriggerProcessor(
                     triggers=("--path", "-p"),
@@ -301,9 +366,16 @@ class TestOption:
 class TestArgument:
     def path_arg(self) -> Argument:
         arg = Argument(
-            name="a",
-            descr="Path option",
-            default_value=...,
+            **asdict(
+                ParameterSignature(
+                    name="a",
+                    python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    cli_kind=CliParamKind.option,
+                    descr="Path option",
+                    default_value=...,
+                    annot=Path,
+                )
+            ),
             type_converter=PathCLIArgConverter(Path),
             type_str="Path",
         )

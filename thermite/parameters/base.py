@@ -6,6 +6,7 @@ from exceptiongroup import ExceptionGroup
 
 from thermite.exceptions import ParameterError, TriggerError
 from thermite.help import ArgHelp, OptHelp, ProcessorHelp
+from thermite.signatures import ParameterSignature
 from thermite.type_converters import (
     CLIArgConverterBase,
     CLIArgConverterSimple,
@@ -34,12 +35,9 @@ class TriggerUsedError(Exception):
 
 
 @mutable(kw_only=True)
-class Parameter(ABC):
+class Parameter(ABC, ParameterSignature):
     """Base class for Parameters."""
 
-    descr: Optional[str] = field(default=None)
-    name: str
-    default_value: Any
     _value: Any = field(default=..., init=False)  # type: ignore
     _exceptions: List[Exception] = field(factory=list, init=False)
 
@@ -175,9 +173,12 @@ class Option(Parameter):
             raise Exception("Can't convert option to argument")
 
         res = Argument(
-            descr=self.descr,
             name=self.name,
+            python_kind=self.python_kind,
+            cli_kind=self.cli_kind,
+            descr=self.descr,
             default_value=self.default_value,
+            annot=self.annot,
             type_str=type_str,
             type_converter=type_converter,
         )
@@ -189,10 +190,6 @@ class Option(Parameter):
 class Argument(Parameter):
     type_str: str
     type_converter: CLIArgConverterBase
-
-    @property
-    def nargs(self) -> int:
-        return self.type_converter.num_required_args.max
 
     def process(self, args: Sequence[str]) -> Sequence[str]:
         """Implement of general argument processing."""

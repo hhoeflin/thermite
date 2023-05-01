@@ -1,11 +1,9 @@
-import enum
 import inspect
 from typing import (
     Any,
     Callable,
     Dict,
     List,
-    Optional,
     Sequence,
     Tuple,
     Type,
@@ -14,11 +12,16 @@ from typing import (
     get_origin,
 )
 
-from attrs import mutable
-from docstring_parser import parse
-from loguru import logger
+from attrs import asdict
 
-from thermite.help import extract_descriptions
+from thermite.signatures import (
+    CliParamKind,
+    ObjSignature,
+    ParameterSignature,
+    process_class_to_obj_signature,
+    process_function_to_obj_signature,
+    process_instance_to_obj_signature,
+)
 from thermite.type_converters import CLIArgConverterStore
 from thermite.utils import clean_type_str, clify_argname
 
@@ -31,154 +34,112 @@ from .processors import (
 )
 
 
-class CliParamKind(enum.Enum):
-    option = "option"
-    argument = "argument"
+def process_parameter(
+    param_sig: ParameterSignature, store: CLIArgConverterStore
+) -> Union[Parameter, ParameterGroup]:
+    """
+    Process a function parameter into a thermite parameter
+    """
+    # find the right type converter
+    # if no type annotations, it is assumed it is str
 
+    res: Union[Parameter, ParameterGroup]
 
-@mutable
-class SignatureParameter:
-    name: str
-    python_kind: inspect.Parameter
-    cli_kind: CliParamKind
-    descr: str
-    default: Any
-    annot: Type
-
-    def create(self, store: CLIArgConverterStore) -> Union[Parameter, ParameterGroup]:
-        """
-        Process a function parameter into a thermite parameter
-        """
-        # find the right type converter
-        # if no type annotations, it is assumed it is str
-        if self.annot != inspect.Parameter.empty:
-            annot_to_use: Type = self.annot
-        else:
-            annot_to_use = str
-
-        # get default value
-        if self.default == inspect.Parameter.empty:
-            default_val = ...
-        else:
-            default_val = self.default
-
-        res: Union[Parameter, ParameterGroup]
-
-        if self.python_kind == inspect.Parameter.VAR_POSITIONAL:
-            # argument list
-            # the converter needs to be changed; the type annotation is per item,
-            # not for the whole list
-            annot_to_use = List[annot_to_use]  # type: ignore
-            conv = store.get_converter(annot_to_use)
+    if param_sig.python_kind == inspect.Parameter.VAR_POSITIONAL:
+        # argument list
+        # the converter needs to be changed; the type annotation is per item,
+        # not for the whole list
+        annot_to_use = List[param_sig.annot]  # type: ignore
+        conv = store.get_converter(annot_to_use)
+        res = Option(
+            **asdict(param_sig),
+            processors=[
+                ConvertListTriggerProcessor(
+                    triggers=[f"--{clify_argname(param_sig.name)}"],
+                    type_converter=conv,
+                    type_str=clean_type_str(annot_to_use),
+                )
+            ],
+        )
+    elif param_sig.python_kind in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.KEYWORD_ONLY,
+        inspect.Parameter.POSITIONAL_ONLY,
+    ):
+        if param_sig.annot == bool:
+            # need to use a bool-option
+            res = bool_option(
+                param_sig=param_sig,
+                pos_triggers=[f"--{clify_argname(param_sig.name)}"],
+                neg_triggers=[f"--no-{clify_argname(param_sig.name)}"],
+            )
+        elif get_origin(param_sig.annot) in (List, list, Sequence):
+            annot_args = get_args(param_sig.annot)
+            if len(annot_args) == 0:
+                inner_type = str
+            elif len(annot_args) == 1:
+                inner_type = annot_args[0]
+            else:
+                raise TypeError(f"{str(param_sig.annot)} has more than 1 argument.")
+            conv = store.get_converter(inner_type)
             res = Option(
-                name=self.name,
-                descr=self.descr,
-                default_value=default_val,
+                **asdict(param_sig),
                 processors=[
                     ConvertListTriggerProcessor(
-                        triggers=[f"--{clify_argname(self.name)}"],
+                        triggers=[f"--{clify_argname(param_sig.name)}"],
                         type_converter=conv,
-                        type_str=clean_type_str(annot_to_use),
+                        type_str=clean_type_str(param_sig.annot),
                     )
                 ],
             )
-        elif self.python_kind in (
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-            inspect.Parameter.POSITIONAL_ONLY,
-        ):
-            if annot_to_use == bool:
-                # need to use a bool-option
-                res = bool_option(
-                    name=self.name,
-                    default_value=default_val,
-                    descr=self.descr,
-                    pos_triggers=[f"--{clify_argname(self.name)}"],
-                    neg_triggers=[f"--no-{clify_argname(self.name)}"],
-                )
-            elif get_origin(annot_to_use) in (List, list, Sequence):
-                annot_args = get_args(annot_to_use)
-                if len(annot_args) == 0:
-                    inner_type = str
-                elif len(annot_args) == 1:
-                    inner_type = annot_args[0]
-                else:
-                    raise TypeError(f"{str(annot_to_use)} has more than 1 argument.")
-                conv = store.get_converter(inner_type)
+        else:
+            try:
+                conv = store.get_converter(param_sig.annot)
                 res = Option(
-                    name=self.name,
-                    descr=self.descr,
-                    default_value=default_val,
+                    **asdict(param_sig),
                     processors=[
-                        ConvertListTriggerProcessor(
-                            triggers=[f"--{clify_argname(self.name)}"],
+                        ConvertReplaceTriggerProcessor(
+                            triggers=[f"--{clify_argname(param_sig.name)}"],
                             type_converter=conv,
-                            type_str=clean_type_str(annot_to_use),
+                            type_str=clean_type_str(param_sig.annot),
                         )
                     ],
                 )
-            else:
-                try:
-                    conv = store.get_converter(annot_to_use)
-                    res = Option(
-                        name=self.name,
-                        descr=self.descr,
-                        default_value=default_val,
-                        processors=[
-                            ConvertReplaceTriggerProcessor(
-                                triggers=[f"--{clify_argname(self.name)}"],
-                                type_converter=conv,
-                                type_str=clean_type_str(annot_to_use),
-                            )
-                        ],
+            except TypeError:
+                # see if this could be done using a class option group
+                if inspect.isclass(param_sig.annot):
+                    res = process_class_to_param_group(
+                        klass=param_sig.annot,
+                        store=store,
+                        name=param_sig.name,
+                        child_prefix_omit_name=False,
                     )
-                except TypeError:
-                    # see if this could be done using a class option group
-                    if inspect.isclass(annot_to_use):
-                        res = process_class_to_param_group(
-                            klass=annot_to_use,
-                            store=store,
-                            name=self.name,
-                            child_prefix_omit_name=False,
-                        )
-                        res.default_value = default_val
-                    else:
-                        raise
-        elif self.python_kind == inspect.Parameter.VAR_KEYWORD:
-            # not yet a solution; should allow to pass any option
-            raise NotImplementedError("VAR_KEYWORDS not yet supported")
-        else:
-            raise Exception(f"Unknown value for kind: {self.python_kind}")
+                    res.default_value = param_sig.default_value
+                else:
+                    raise
+    elif param_sig.python_kind == inspect.Parameter.VAR_KEYWORD:
+        # not yet a solution; should allow to pass any option
+        raise NotImplementedError("VAR_KEYWORDS not yet supported")
+    else:
+        raise Exception(f"Unknown value for kind: {param_sig.python_kind}")
 
-        if self.cli_kind == CliParamKind.argument:
-            if isinstance(res, Option):
-                res = res.to_argument()
-            elif isinstance(res, ParameterGroup):
-                raise Exception("Can't convert ParamGroup to Argument")
+    if param_sig.cli_kind == CliParamKind.argument:
+        if isinstance(res, Option):
+            res = res.to_argument()
+        elif isinstance(res, ParameterGroup):
+            raise Exception("Can't convert ParamGroup to Argument")
 
-        return res
-
-
-@mutable
-class Signature:
-    short_descr: str
-    long_descr: str
-    params: Dict[str, SignatureParameter]
-    return_annot: Type
+    return res
 
 
 def bool_option(
-    name: str,
-    descr: str,
+    param_sig: ParameterSignature,
     pos_triggers: Sequence[str],
     neg_triggers: Sequence[str],
-    default_value: Any,
     prefix: str = "",
 ):
     return Option(
-        name=name,
-        descr=descr,
-        default_value=default_value,
+        **asdict(param_sig),
         prefix=prefix,
         processors=[
             ConstantTriggerProcessor(
@@ -191,118 +152,8 @@ def bool_option(
     )
 
 
-def process_parameter(
-    param: inspect.Parameter,
-    description: Optional[str],
-    store: CLIArgConverterStore,
-) -> Union[Parameter, ParameterGroup]:
-    """
-    Process a function parameter into a thermite parameter
-    """
-    # find the right type converter
-    # if no type annotations, it is assumed it is str
-    if param.annotation != inspect.Parameter.empty:
-        annot_to_use: Type = param.annotation
-    else:
-        annot_to_use = str
-
-    # get default value
-    if param.default == inspect.Parameter.empty:
-        default_val = ...
-    else:
-        default_val = param.default
-
-    if param.kind == inspect.Parameter.VAR_POSITIONAL:
-        # argument list
-        # the converter needs to be changed; the type annotation is per item,
-        # not for the whole list
-        annot_to_use = List[annot_to_use]  # type: ignore
-        conv = store.get_converter(annot_to_use)
-        return Option(
-            name=param.name,
-            descr=description,
-            default_value=default_val,
-            processors=[
-                ConvertListTriggerProcessor(
-                    triggers=[f"--{clify_argname(param.name)}"],
-                    type_converter=conv,
-                    type_str=clean_type_str(annot_to_use),
-                )
-            ],
-        )
-    elif param.kind in (
-        inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        inspect.Parameter.KEYWORD_ONLY,
-        inspect.Parameter.POSITIONAL_ONLY,
-    ):
-        if annot_to_use == bool:
-            # need to use a bool-option
-            return bool_option(
-                name=param.name,
-                default_value=default_val,
-                descr=description if description is not None else "",
-                pos_triggers=[f"--{clify_argname(param.name)}"],
-                neg_triggers=[f"--no-{clify_argname(param.name)}"],
-            )
-        elif get_origin(annot_to_use) in (List, list, Sequence):
-            annot_args = get_args(annot_to_use)
-            if len(annot_args) == 0:
-                inner_type = str
-            elif len(annot_args) == 1:
-                inner_type = annot_args[0]
-            else:
-                raise TypeError(f"{str(annot_to_use)} has more than 1 argument.")
-            conv = store.get_converter(inner_type)
-            return Option(
-                name=param.name,
-                descr=description,
-                default_value=default_val,
-                processors=[
-                    ConvertListTriggerProcessor(
-                        triggers=[f"--{clify_argname(param.name)}"],
-                        type_converter=conv,
-                        type_str=clean_type_str(annot_to_use),
-                    )
-                ],
-            )
-        else:
-            try:
-                conv = store.get_converter(annot_to_use)
-                return Option(
-                    name=param.name,
-                    descr=description,
-                    default_value=default_val,
-                    processors=[
-                        ConvertReplaceTriggerProcessor(
-                            triggers=[f"--{clify_argname(param.name)}"],
-                            type_converter=conv,
-                            type_str=clean_type_str(annot_to_use),
-                        )
-                    ],
-                )
-            except TypeError:
-                # see if this could be done using a class option group
-                if inspect.isclass(annot_to_use):
-                    res = process_class_to_param_group(
-                        klass=annot_to_use,
-                        store=store,
-                        name=param.name,
-                        child_prefix_omit_name=False,
-                    )
-                    res.default_value = default_val
-                    return res
-                else:
-                    raise
-    elif param.kind == inspect.Parameter.VAR_KEYWORD:
-        # not yet a solution; should allow to pass any option
-        raise NotImplementedError("VAR_KEYWORDS not yet supported")
-    else:
-        raise Exception(f"Unknown value for kind: {param.kind}")
-
-
-def parse_func_signature(
-    params: Sequence[inspect.Parameter],
-    args_doc_dict: Dict[str, Optional[str]],
+def process_param_sig_dict(
+    params: Dict[str, ParameterSignature],
     omit_first: bool,
     store: CLIArgConverterStore,
 ) -> Tuple[
@@ -313,22 +164,21 @@ def parse_func_signature(
     posargs = []
     varposargs = []
     kwargs = {}
-    for count, param in enumerate(params):
+    for count, param in enumerate(params.values()):
         if omit_first and count == 0:
             # this is self
             continue
         else:
-            if param.kind == inspect.Parameter.VAR_KEYWORD:
+            if param.python_kind == inspect.Parameter.VAR_KEYWORD:
                 continue
             else:
                 cli_param = process_parameter(
-                    param=param,
-                    description=args_doc_dict[param.name],
+                    param_sig=param,
                     store=store,
                 )
-                if param.kind == inspect.Parameter.POSITIONAL_ONLY:
+                if param.python_kind == inspect.Parameter.POSITIONAL_ONLY:
                     posargs.append(cli_param)
-                elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                elif param.python_kind == inspect.Parameter.VAR_POSITIONAL:
                     varposargs.append(cli_param)
                 else:
                     kwargs[param.name] = cli_param
@@ -336,23 +186,23 @@ def parse_func_signature(
     return (posargs, varposargs, kwargs)
 
 
-def process_function_to_param_group(
-    func: Callable, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
+def process_obj_signature_to_param_group(
+    obj: Any,
+    obj_sig: ObjSignature,
+    store: CLIArgConverterStore,
+    name: str,
+    child_prefix_omit_name: bool,
+    omit_first: bool,
 ) -> ParameterGroup:
-    descriptions = extract_descriptions(func)
-
-    func_sig = inspect.signature(func)
-
-    posargs, varposargs, kwargs = parse_func_signature(
-        list(func_sig.parameters.values()),
-        args_doc_dict=descriptions.args_doc_dict,
-        omit_first=False,
+    posargs, varposargs, kwargs = process_param_sig_dict(
+        obj_sig.params,
+        omit_first=omit_first,
         store=store,
     )
     param_group = ParameterGroup(
-        descr=descriptions.short_descr,
-        obj=func,
-        expected_ret_type=func_sig.return_annotation,
+        descr=obj_sig.short_descr,
+        obj=obj,
+        expected_ret_type=obj_sig.return_annot,
         name=name,
         child_prefix_omit_name=child_prefix_omit_name,
         posargs=posargs,
@@ -363,58 +213,43 @@ def process_function_to_param_group(
     return param_group
 
 
+def process_function_to_param_group(
+    func: Callable, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
+) -> ParameterGroup:
+    obj_sig = process_function_to_obj_signature(func=func)
+    return process_obj_signature_to_param_group(
+        obj=func,
+        obj_sig=obj_sig,
+        store=store,
+        name=name,
+        child_prefix_omit_name=child_prefix_omit_name,
+        omit_first=False,
+    )
+
+
 def process_class_to_param_group(
     klass: Type, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
 ) -> ParameterGroup:
-    descriptions = extract_descriptions(klass)
-    if klass.__init__ != object.__init__:
-        init_sig = inspect.signature(klass.__init__)
-
-        # the signature has self at the beginning that we need to ignore
-        posargs, varposargs, kwargs = parse_func_signature(
-            list(init_sig.parameters.values()),
-            args_doc_dict=descriptions.args_doc_dict,
-            omit_first=True,
-            store=store,
-        )
-        param_group = ParameterGroup(
-            descr=descriptions.short_descr,
-            obj=klass,
-            expected_ret_type=klass,
-            name=name,
-            child_prefix_omit_name=child_prefix_omit_name,
-            posargs=posargs,
-            varposargs=varposargs,
-            kwargs=kwargs,
-        )
-        return param_group
-    else:
-        return process_instance_to_param_group(
-            klass(), name=name, child_prefix_omit_name=child_prefix_omit_name
-        )
+    obj_sig = process_class_to_obj_signature(klass=klass)
+    return process_obj_signature_to_param_group(
+        obj=klass,
+        obj_sig=obj_sig,
+        store=store,
+        name=name,
+        child_prefix_omit_name=child_prefix_omit_name,
+        omit_first=True,
+    )
 
 
 def process_instance_to_param_group(
-    obj: Any, name: str, child_prefix_omit_name: bool
+    obj: Any, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
 ) -> ParameterGroup:
-    # get the documentation
-    klass_doc = inspect.getdoc(obj.__class__)
-
-    if klass_doc is not None:
-        klass_doc_parsed = parse(klass_doc)
-        short_description = klass_doc_parsed.short_description
-    else:
-        short_description = None
-
-    # as it is an instance, there are no things to call
-    param_group = ParameterGroup(
-        descr=short_description,
+    obj_sig = process_instance_to_obj_signature(obj=obj)
+    return process_obj_signature_to_param_group(
         obj=lambda: obj,
-        expected_ret_type=obj.__class__,
+        obj_sig=obj_sig,
+        store=store,
         name=name,
         child_prefix_omit_name=child_prefix_omit_name,
-        posargs=list(),
-        varposargs=list(),
-        kwargs={},
+        omit_first=False,
     )
-    return param_group
