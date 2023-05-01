@@ -35,6 +35,7 @@ from .parameters import (
     process_instance_to_param_group,
 )
 from .preprocessing import split_and_expand, undeque
+from .type_converters import args_used
 
 
 class UnknownCommandError(Exception):
@@ -46,14 +47,17 @@ class Callback:
     callback: Callable[["Command"], None]
     triggers: List[str]
     descr: str
+    num_req_args: Union[int, slice] = 0
 
     def execute(self, cmd: "Command", args: Sequence[str]) -> Optional[Sequence[str]]:
         if args[0] in self.triggers:
-            self.callback(cmd)
-        if len(args) > 1:
-            return args[1:]
+            num_args_use = args_used(
+                num_offered=len(args) - 1, num_req=self.num_req_args
+            )
+            self.callback(cmd, *args[1 : (1 + num_args_use)])
+            return args[(1 + num_args_use) :]
         else:
-            return None
+            raise Exception("Callback was raised without appropriate trigger.")
 
     def help(self) -> CbHelp:
         return CbHelp(triggers=", ".join(self.triggers), descr=self.descr)
