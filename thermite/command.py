@@ -19,6 +19,7 @@ from typing import (
 )
 
 from attrs import field, mutable
+from loguru import logger
 
 from thermite.help import CbHelp, CommandHelp, extract_descriptions
 from thermite.utils import clify_argname
@@ -109,6 +110,8 @@ class Command(MutableMapping):
 
     local_callbacks: List[Callback] = field(factory=list)
 
+    _history: List[str] = field(init=False, factory=list)
+
     def __attrs_post_init__(self):
         if len(self.param_group.cli_args) > 0 and len(self.subcommands) > 0:
             raise Exception("Can't have CLI that has subcommands and arguments")
@@ -127,6 +130,17 @@ class Command(MutableMapping):
 
     def __iter__(self):
         return self.param_group.__iter__()
+
+    def _add_history(self, input_args: List[str], args_return: List[str]) -> None:
+        if len(args_return) > 0:
+            if input_args[-len(args_return) :] != args_return:
+                # something has changed during processing
+                logger.warning(
+                    "Non-processed arguments have changed:"
+                    f"\ninput: {input_args[-len(args_return):]}"
+                    "\nreturned: {args_return}"
+                )
+        self._history.extend(input_args[: (len(input_args) - len(args_return))])
 
     @classmethod
     def _from_function(cls, func: Callable, name: str, config: "config.Config"):
@@ -193,10 +207,12 @@ class Command(MutableMapping):
             if len(input_args) > 0 and input_args[0] in cb_map:
                 cb = cb_map[input_args[0]]
                 args_return = cb.execute(self, input_args)
+                self._add_history(input_args=input_args, args_return=args_return)
                 if args_return is not None:
                     input_args_deque.appendleft(list(args_return))
             else:
                 args_return = self.param_group.process(input_args)
+                self._add_history(input_args=input_args, args_return=args_return)
                 if len(args_return) > 0:
                     input_args_deque.appendleft(list(args_return))
                     if len(args_return) == len(input_args):
@@ -242,6 +258,10 @@ class Command(MutableMapping):
             usage_str += " ARGS"
 
         return usage_str
+
+    @property
+    def name(self) -> str:
+        return self.param_group.name
 
     def help(self) -> CommandHelp:
         # argument help to show
