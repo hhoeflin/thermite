@@ -89,6 +89,13 @@ def check_correct_nargs(num_offered: int, num_req: Union[int, slice]) -> None:
         )
 
 
+def split_args_by_nargs(
+    x: Sequence[str], num_req_args: Union[int, slice]
+) -> Tuple[Sequence[str], Sequence[str]]:
+    num_args_used = args_used(num_offered=len(x), num_req=num_req_args)
+    return (x[:num_args_used], x[num_args_used:])
+
+
 class CLIArgConverterBase(ABC):
     num_req_args: Union[int, slice] = field(init=False)
 

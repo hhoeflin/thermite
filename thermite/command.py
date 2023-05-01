@@ -6,7 +6,6 @@ import types
 from collections.abc import MutableMapping
 from inspect import Signature, classify_class_attrs
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -21,11 +20,10 @@ from typing import (
 from attrs import field, mutable
 from loguru import logger
 
-from thermite.help import CbHelp, CommandHelp, extract_descriptions
+from thermite.config import Config
+from thermite.help import CbHelp, CommandHelp
+from thermite.signatures import extract_descriptions
 from thermite.utils import clify_argname
-
-if TYPE_CHECKING:
-    from . import config
 
 from .parameters import (
     Parameter,
@@ -109,7 +107,7 @@ def cb_list_to_trigger_map(cb_list: List[CliCallback]):
 class Command(MutableMapping):
     param_group: ParameterGroup
     subcommands: Dict[str, Subcommand]
-    config: "config.Config"
+    config: Config
     prev_cmd: Optional["Command"] = None
 
     local_cli_callbacks: List[CliCallback] = field(factory=list)
@@ -147,9 +145,9 @@ class Command(MutableMapping):
         self._history.extend(input_args[: (len(input_args) - len(args_return))])
 
     @classmethod
-    def _from_function(cls, func: Callable, name: str, config: "config.Config"):
+    def _from_function(cls, func: Callable, name: str, config: Config):
         param_group = process_function_to_param_group(
-            func, store=config.stores.cli_args, name=name, child_prefix_omit_name=True
+            func, config=config, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
@@ -158,9 +156,9 @@ class Command(MutableMapping):
         )
 
     @classmethod
-    def _from_instance(cls, obj: Any, name: str, config: "config.Config"):
+    def _from_instance(cls, obj: Any, name: str, config: Config):
         param_group = process_instance_to_param_group(
-            obj, name=name, child_prefix_omit_name=True
+            obj, config=config, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
@@ -169,9 +167,9 @@ class Command(MutableMapping):
         )
 
     @classmethod
-    def _from_class(cls, klass: Type, name: str, config: "config.Config"):
+    def _from_class(cls, klass: Type, name: str, config: Config):
         param_group = process_class_to_param_group(
-            klass, store=config.stores.cli_args, name=name, child_prefix_omit_name=True
+            klass, config=config, name=name, child_prefix_omit_name=True
         )
         return cls(
             param_group=param_group,
@@ -180,7 +178,7 @@ class Command(MutableMapping):
         )
 
     @classmethod
-    def from_obj(cls, obj: Any, name: str, config: "config.Config"):
+    def from_obj(cls, obj: Any, name: str, config: Config):
         if inspect.isfunction(obj) or inspect.ismethod(obj):
             res = cls._from_function(func=obj, name=name, config=config)
         elif inspect.isclass(obj):
@@ -194,7 +192,7 @@ class Command(MutableMapping):
         input_args_deque = split_and_expand(args)
 
         cb_map = dict(
-            **cb_list_to_trigger_map(self.config.callbacks.cli),
+            **cb_list_to_trigger_map(self.config.cli_callbacks),
             **cb_list_to_trigger_map(self.local_cli_callbacks),
         )
 
@@ -267,7 +265,7 @@ class Command(MutableMapping):
     def help(self) -> CommandHelp:
         # argument help to show
         args = [x.help() for x in self.param_group.cli_args]
-        cbs = [x.help() for x in self.config.callbacks.cli + self.local_cli_callbacks]
+        cbs = [x.help() for x in self.config.cli_callbacks + self.local_cli_callbacks]
 
         # the options don't need a special name or description;
         # that is intended for subgroups

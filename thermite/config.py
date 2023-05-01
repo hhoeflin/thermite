@@ -1,33 +1,28 @@
 import inspect
-from abc import abstractmethod
-from collections.abc import MutableMapping
+from collections import defaultdict
+from enum import Enum
 from functools import partial
-from typing import Any, Callable, Generic, List, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Union
 
-from attrs import Factory, field, mutable
-from beartype.door import is_bearable
+from attrs import field, mutable
 
-from .command import CliCallback, Command
-from .parameters import ParameterGroup
 from .type_converters import CLIArgConverterStore
 
-
-class CmdPostProc:
-    @abstractmethod
-    def post_process(self, cmd: Command):
-        pass
-
-    @abstractmethod
-    def subcommand(self, cmd: Command):
-        pass
+if TYPE_CHECKING:
+    from .command import CliCallback, Command
+    from .parameters import ParameterGroup
+    from .signatures import ObjSignature
 
 
-VT = TypeVar("VT")
+class Event(Enum):
+    START_ARGS_PRE_PROCESS = "START_ARGS_PRE_PROCESS"
+    SIG_EXTRACT = "SIG_EXTRACT"
+    CMD_POST_CREATE = "CMD_POST_CREATE"
+    CMD_POST_PROCESS = "CMD_POST_PROCESS"
+    PG_POST_CREATE = "PG_POST_CREATE"
 
-
-@mutable
-class Signature:
-    ...
+    def __str__(self) -> str:
+        return self.value
 
 
 def standardize_obj(obj: Any) -> Any:
@@ -42,11 +37,11 @@ def standardize_obj(obj: Any) -> Any:
 
 
 def match_obj_filter_cmd(
-    obj_to_match: Any, cb: Callable[[Command], Command]
-) -> Callable[[Command], Command]:
+    obj_to_match: Any, cb: Callable[["Command"], "Command"]
+) -> Callable[["Command"], "Command"]:
     std_obj_to_match = standardize_obj(obj_to_match)
 
-    def filtered_callback(cmd: Command) -> Command:
+    def filtered_callback(cmd: "Command") -> "Command":
         if standardize_obj(cmd.param_group.obj) == std_obj_to_match:
             return cb(cmd)
         else:
@@ -56,11 +51,11 @@ def match_obj_filter_cmd(
 
 
 def match_obj_filter_pg(
-    obj_to_match: Any, cb: Callable[[ParameterGroup], ParameterGroup]
-) -> Callable[[ParameterGroup], ParameterGroup]:
+    obj_to_match: Any, cb: Callable[["ParameterGroup"], "ParameterGroup"]
+) -> Callable[["ParameterGroup"], "ParameterGroup"]:
     std_obj_to_match = standardize_obj(obj_to_match)
 
-    def filtered_callback(pg: ParameterGroup) -> ParameterGroup:
+    def filtered_callback(pg: "ParameterGroup") -> "ParameterGroup":
         if standardize_obj(pg.obj) == std_obj_to_match:
             return cb(pg)
         else:
@@ -70,11 +65,11 @@ def match_obj_filter_pg(
 
 
 def match_obj_filter_sig(
-    obj_to_match: Any, cb: Callable[[Any, Signature], Signature]
-) -> Callable[[Any, Signature], Signature]:
+    obj_to_match: Any, cb: Callable[[Any, "ObjSignature"], "ObjSignature"]
+) -> Callable[[Any, "ObjSignature"], "ObjSignature"]:
     std_obj_to_match = standardize_obj(obj_to_match)
 
-    def filtered_callback(obj: Any, sig: Signature) -> Signature:
+    def filtered_callback(obj: Any, sig: "ObjSignature") -> "ObjSignature":
         if standardize_obj(obj) == std_obj_to_match:
             return cb(obj, sig)
         else:
@@ -83,65 +78,48 @@ def match_obj_filter_sig(
     return filtered_callback
 
 
-class ThermiteStore(MutableMapping, Generic[VT]):
-    def __init__(self, dict_update=None):
-        self.data = {}
-        if dict_update is not None:
-            for k, v in dict_update.items():
-                self[k] = v
-
-    @staticmethod
-    def _standardize(obj: Any) -> Any:
-        return standardize_obj(obj)
-
-    def __getitem__(self, key) -> VT:
-        return self.data[self._standardize(key)]
-
-    def __setitem__(self, key, value: VT):
-        self.data[self._standardize(key)] = value
-
-    def __delitem__(self, key):
-        del self.data[self._standardize(key)]
-
-    def __len__(self) -> int:
-        return len(self.data)
-
-    def __iter__(self):
-        return iter(self.data)
-
-
 @mutable
-class ConfigStores:
-    cli_args: CLIArgConverterStore = field(
+class EventCallbacks:
+    add_defaults: bool = True
+
+    def __attrs_post_init__(self):
+        if self.add_defaults:
+            self.add_default_events()
+
+    def add_default_events(self):
+        self.event_obj_filters[Event.SIG_EXTRACT] = match_obj_filter_sig
+        self.event_obj_filters[Event.CMD_POST_CREATE] = match_obj_filter_cmd
+        self.event_obj_filters[Event.CMD_POST_PROCESS] = match_obj_filter_cmd
+        self.event_obj_filters[Event.PG_POST_CREATE] = match_obj_filter_pg
+
+    event_cb_dict: Dict[Union[str, Event], List[Callable]] = field(
+        factory=lambda: defaultdict(list)
+    )
+    event_obj_filters: Dict[
+        Union[str, Event], Callable[[Any, Callable], Callable]
+    ] = field(factory=lambda: defaultdict(None))
+
+    def add_event_cb(self, event: Union[str, Event], cb: Callable, obj: Any = None):
+        if obj is None:
+            self.event_cb_dict[event].append(cb)
+        else:
+            if self.event_obj_filters[event] is None:
+                raise Exception(f"No object filter for event {str(event)} registered")
+            self.event_cb_dict[event].append(self.event_obj_filters[event](obj, cb))
+
+
+@mutable(kw_only=True)
+class Config:
+    cli_callbacks: List["CliCallback"] = field(factory=list)
+    cli_args_store: CLIArgConverterStore = field(
         factory=partial(CLIArgConverterStore, add_defaults=True)
     )
-    # sig_extract: ThermiteStore[Callable[[Signature], Signature]] = field(
-    #    factory=ThermiteStore
-    # )
-    # cmd_post_create: ThermiteStore[Callable[[Command], Command]] = field(
-    #    factory=ThermiteStore
-    # )
-    # cmd_post_process: ThermiteStore[CmdPostProc] = field(factory=ThermiteStore)
-    # pg_post_create: ThermiteStore[Callable[[ParameterGroup], ParameterGroup]] = field(
-    #    factory=ThermiteStore
-    # )
-
-
-@mutable
-class ConfigCallbacks:
-    sig_extract: List[Callable[[Signature], Signature]] = field(factory=list)
-    cmd_post_create: List[Callable[[Command], Command]] = field(factory=list)
-    cmd_post_process: List[Callable[[Command], Command]] = field(factory=list)
-    pg_post_create: List[Callable[[ParameterGroup], ParameterGroup]] = field(
-        factory=list
+    event_callbacks: EventCallbacks = field(
+        factory=partial(EventCallbacks, add_defaults=True)
     )
-    cli: List[CliCallback] = field(factory=list)
 
+    def add_cli_callback(self, cb: "CliCallback"):
+        self.cli_callbacks.append(cb)
 
-@mutable
-class Config:
-    stores: ConfigStores = field(factory=ConfigStores)
-    callbacks: ConfigCallbacks = field(factory=ConfigCallbacks)
-
-    def add_cli_callback(self, cb: CliCallback):
-        self.callbacks.cli.append(cb)
+    def get_event_cbs(self, event: Union[str, Event]) -> List[Callable]:
+        return self.event_callbacks.event_cb_dict[event]

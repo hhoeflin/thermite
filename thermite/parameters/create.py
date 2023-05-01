@@ -14,6 +14,7 @@ from typing import (
 
 from attrs import asdict
 
+from thermite.config import Config, Event
 from thermite.signatures import (
     CliParamKind,
     ObjSignature,
@@ -22,7 +23,6 @@ from thermite.signatures import (
     process_function_to_obj_signature,
     process_instance_to_obj_signature,
 )
-from thermite.type_converters import CLIArgConverterStore
 from thermite.utils import clean_type_str, clify_argname
 
 from .base import Option, Parameter
@@ -35,14 +35,14 @@ from .processors import (
 
 
 def process_parameter(
-    param_sig: ParameterSignature, store: CLIArgConverterStore
+    param_sig: ParameterSignature, config: Config
 ) -> Union[Parameter, ParameterGroup]:
     """
     Process a function parameter into a thermite parameter
     """
     # find the right type converter
     # if no type annotations, it is assumed it is str
-
+    store = config.cli_args_store
     res: Union[Parameter, ParameterGroup]
 
     if param_sig.python_kind == inspect.Parameter.VAR_POSITIONAL:
@@ -110,7 +110,7 @@ def process_parameter(
                 if inspect.isclass(param_sig.annot):
                     res = process_class_to_param_group(
                         klass=param_sig.annot,
-                        store=store,
+                        config=config,
                         name=param_sig.name,
                         child_prefix_omit_name=False,
                     )
@@ -123,7 +123,7 @@ def process_parameter(
     else:
         raise Exception(f"Unknown value for kind: {param_sig.python_kind}")
 
-    if param_sig.cli_kind == CliParamKind.argument:
+    if param_sig.cli_kind == CliParamKind.ARGUMENT:
         if isinstance(res, Option):
             res = res.to_argument()
         elif isinstance(res, ParameterGroup):
@@ -155,7 +155,7 @@ def bool_option(
 def process_param_sig_dict(
     params: Dict[str, ParameterSignature],
     omit_first: bool,
-    store: CLIArgConverterStore,
+    config: Config,
 ) -> Tuple[
     List[Union[Parameter, ParameterGroup]],
     List[Union[Parameter, ParameterGroup]],
@@ -174,7 +174,7 @@ def process_param_sig_dict(
             else:
                 cli_param = process_parameter(
                     param_sig=param,
-                    store=store,
+                    config=config,
                 )
                 if param.python_kind == inspect.Parameter.POSITIONAL_ONLY:
                     posargs.append(cli_param)
@@ -189,7 +189,7 @@ def process_param_sig_dict(
 def process_obj_signature_to_param_group(
     obj: Any,
     obj_sig: ObjSignature,
-    store: CLIArgConverterStore,
+    config: Config,
     name: str,
     child_prefix_omit_name: bool,
     omit_first: bool,
@@ -197,7 +197,7 @@ def process_obj_signature_to_param_group(
     posargs, varposargs, kwargs = process_param_sig_dict(
         obj_sig.params,
         omit_first=omit_first,
-        store=store,
+        config=config,
     )
     param_group = ParameterGroup(
         descr=obj_sig.short_descr,
@@ -214,42 +214,69 @@ def process_obj_signature_to_param_group(
 
 
 def process_function_to_param_group(
-    func: Callable, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
+    func: Callable, config: Config, name: str, child_prefix_omit_name: bool
 ) -> ParameterGroup:
     obj_sig = process_function_to_obj_signature(func=func)
-    return process_obj_signature_to_param_group(
+    # SIG_EXTRACT Event start
+    for cb in config.get_event_cbs(Event.SIG_EXTRACT):
+        obj_sig = cb(func, obj_sig)
+    # SIG_EXTRACT Event end
+    pg = process_obj_signature_to_param_group(
         obj=func,
         obj_sig=obj_sig,
-        store=store,
+        config=config,
         name=name,
         child_prefix_omit_name=child_prefix_omit_name,
         omit_first=False,
     )
+    # PG_POST_CREATE Event start
+    for cb in config.get_event_cbs(Event.PG_POST_CREATE):
+        pg = cb(pg)
+    # PG_POST_CREATE Event end
+    return pg
 
 
 def process_class_to_param_group(
-    klass: Type, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
+    klass: Type, config: Config, name: str, child_prefix_omit_name: bool
 ) -> ParameterGroup:
     obj_sig = process_class_to_obj_signature(klass=klass)
-    return process_obj_signature_to_param_group(
+    # SIG_EXTRACT Event start
+    for cb in config.get_event_cbs(Event.SIG_EXTRACT):
+        obj_sig = cb(klass, obj_sig)
+    # SIG_EXTRACT Event end
+    pg = process_obj_signature_to_param_group(
         obj=klass,
         obj_sig=obj_sig,
-        store=store,
+        config=config,
         name=name,
         child_prefix_omit_name=child_prefix_omit_name,
         omit_first=True,
     )
+    # PG_POST_CREATE Event start
+    for cb in config.get_event_cbs(Event.PG_POST_CREATE):
+        pg = cb(pg)
+    # PG_POST_CREATE Event end
+    return pg
 
 
 def process_instance_to_param_group(
-    obj: Any, store: CLIArgConverterStore, name: str, child_prefix_omit_name: bool
+    obj: Any, config: Config, name: str, child_prefix_omit_name: bool
 ) -> ParameterGroup:
     obj_sig = process_instance_to_obj_signature(obj=obj)
-    return process_obj_signature_to_param_group(
+    # SIG_EXTRACT Event start
+    for cb in config.get_event_cbs(Event.SIG_EXTRACT):
+        obj_sig = cb(obj, obj_sig)
+    # SIG_EXTRACT Event end
+    pg = process_obj_signature_to_param_group(
         obj=lambda: obj,
         obj_sig=obj_sig,
-        store=store,
+        config=config,
         name=name,
         child_prefix_omit_name=child_prefix_omit_name,
         omit_first=False,
     )
+    # PG_POST_CREATE Event start
+    for cb in config.get_event_cbs(Event.PG_POST_CREATE):
+        pg = cb(pg)
+    # PG_POST_CREATE Event end
+    return pg

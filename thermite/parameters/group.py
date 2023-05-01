@@ -13,7 +13,7 @@ from thermite.exceptions import (
     TriggerError,
 )
 from thermite.help import OptionGroupHelp
-from thermite.utils import split_args_by_nargs
+from thermite.type_converters import split_args_by_nargs
 
 from .base import Argument, Option, Parameter
 
@@ -202,7 +202,7 @@ class ParameterGroup(MutableMapping):
                 if argument.unset:
                     self._num_bound += 1
                     args_use, args_remain = split_args_by_nargs(
-                        input_args, argument.nargs
+                        input_args, argument.type_converter.num_req_args
                     )
                     argument.process(args_use)
                     return args_remain

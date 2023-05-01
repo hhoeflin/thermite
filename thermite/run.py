@@ -7,11 +7,10 @@ from attrs import mutable
 
 from thermite.exceptions import RichExcHandler, ThermiteExcHandler
 
-from .callbacks import CliCallback, help_callback
+from .callbacks import help_callback
 from .command import Command
-from .config import Config
+from .config import Config, Event
 from .exceptions import CommandError, ParameterError
-from .type_converters import CLIArgConverterStore
 
 
 def process_all_args(input_args: List[str], cmd: Command) -> Any:
@@ -24,9 +23,17 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
     while True:
         if len(input_args) > 0:
             input_args = cmd.process(input_args)
+            # CMD_POST_PROCESS Event start
+            for cb in cmd.config.get_event_cbs(Event.CMD_POST_PROCESS):
+                cmd = cb(cmd)
+            # CMD_POST_PROCESS Event end
         if len(input_args) > 0:
             subcmd = cmd.get_subcommand(input_args[0])
             input_args = input_args[1:]
+            # CMD_POST_CREATE Event start
+            for cb in cmd.config.get_event_cbs(Event.CMD_POST_CREATE):
+                subcmd = cb(subcmd)
+            # CMD_POST_CREATE Event end
             cmd = subcmd
         else:
             try:
@@ -64,6 +71,14 @@ def run(
 
     try:
         cmd = Command.from_obj(obj, name=name, config=config)
+        # CMD_POST_CREATE Event start
+        for cb in config.get_event_cbs(Event.CMD_POST_CREATE):
+            cmd = cb(cmd)
+        # CMD_POST_CREATE Event end
+        # START_ARGS_PRE_PROCESS Event start
+        for cb in config.get_event_cbs(Event.START_ARGS_PRE_PROCESS):
+            input_args = cb(cmd, input_args)
+        # START_ARGS_PRE_PROCESS Event end
         return process_all_args(input_args=input_args, cmd=cmd)
     except Exception as input_e:
         # run through all exception handlers in order

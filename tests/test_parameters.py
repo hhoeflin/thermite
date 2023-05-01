@@ -5,6 +5,7 @@ from typing import List, Tuple
 import pytest
 from attrs import asdict, mutable
 
+from thermite.config import Config
 from thermite.exceptions import ParameterError, TriggerError, UnspecifiedOptionError
 from thermite.parameters import (
     Argument,
@@ -93,7 +94,7 @@ class TestBoolOption:
             ParameterSignature(
                 name="a",
                 python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                cli_kind=CliParamKind.option,
+                cli_kind=CliParamKind.OPTION,
                 descr="test",
                 default_value=...,
                 annot=bool,
@@ -116,7 +117,7 @@ class TestBoolOption:
             ParameterSignature(
                 name="a",
                 python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                cli_kind=CliParamKind.option,
+                cli_kind=CliParamKind.OPTION,
                 descr="test",
                 default_value=...,
                 annot=bool,
@@ -133,7 +134,7 @@ class TestBoolOption:
             ParameterSignature(
                 name="a",
                 python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                cli_kind=CliParamKind.option,
+                cli_kind=CliParamKind.OPTION,
                 descr="test",
                 default_value=...,
                 annot=bool,
@@ -150,7 +151,7 @@ class TestBoolOption:
             ParameterSignature(
                 name="a",
                 python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                cli_kind=CliParamKind.option,
+                cli_kind=CliParamKind.OPTION,
                 descr="test",
                 default_value=...,
                 annot=bool,
@@ -170,7 +171,7 @@ class TestBoolOption:
             ParameterSignature(
                 name="a",
                 python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                cli_kind=CliParamKind.option,
+                cli_kind=CliParamKind.OPTION,
                 descr="test",
                 default_value=...,
                 annot=bool,
@@ -186,7 +187,7 @@ class TestBoolOption:
             ParameterSignature(
                 name="a",
                 python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                cli_kind=CliParamKind.option,
+                cli_kind=CliParamKind.OPTION,
                 descr="test",
                 default_value=...,
                 annot=bool,
@@ -202,7 +203,7 @@ class TestBoolOption:
             ParameterSignature(
                 name="a",
                 python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                cli_kind=CliParamKind.option,
+                cli_kind=CliParamKind.OPTION,
                 descr="test",
                 default_value=...,
                 annot=bool,
@@ -264,7 +265,7 @@ class TestOption:
                 ParameterSignature(
                     name="a",
                     python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    cli_kind=CliParamKind.option,
+                    cli_kind=CliParamKind.OPTION,
                     descr="Path option",
                     default_value=...,
                     annot=Path,
@@ -294,7 +295,7 @@ class TestOption:
                 ParameterSignature(
                     name="a",
                     python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    cli_kind=CliParamKind.option,
+                    cli_kind=CliParamKind.OPTION,
                     descr="Path option",
                     default_value=[],
                     annot=Path,
@@ -318,7 +319,7 @@ class TestOption:
                 ParameterSignature(
                     name="a",
                     python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    cli_kind=CliParamKind.option,
+                    cli_kind=CliParamKind.OPTION,
                     descr="Path option",
                     default_value=[],
                     annot=Path,
@@ -342,7 +343,7 @@ class TestOption:
                 ParameterSignature(
                     name="a",
                     python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    cli_kind=CliParamKind.option,
+                    cli_kind=CliParamKind.OPTION,
                     descr="Path option",
                     default_value=[],
                     annot=Path,
@@ -370,7 +371,7 @@ class TestArgument:
                 ParameterSignature(
                     name="a",
                     python_kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    cli_kind=CliParamKind.option,
+                    cli_kind=CliParamKind.OPTION,
                     descr="Path option",
                     default_value=...,
                     annot=Path,
@@ -391,7 +392,7 @@ class TestParamGroup:
     def param_group(self) -> ParameterGroup:
         res = process_class_to_param_group(
             NestedClass,
-            store=CLIArgConverterStore(),
+            config=Config(),
             name="test",
             child_prefix_omit_name=True,
         )

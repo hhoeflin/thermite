@@ -1,15 +1,15 @@
-import enum
 import inspect
 from collections import defaultdict
+from enum import Enum
 from typing import Any, Callable, Dict, Optional, Type
 
 from attrs import field, mutable
 from docstring_parser import Docstring, parse
 
 
-class CliParamKind(enum.Enum):
-    option = "option"
-    argument = "argument"
+class CliParamKind(Enum):
+    OPTION = "OPTION"
+    ARGUMENT = "ARGUMENT"
 
 
 @mutable
@@ -86,7 +86,7 @@ def create_params_sig_dict(
         params[name] = ParameterSignature(
             name=name,
             python_kind=param.kind,
-            cli_kind=CliParamKind.option,
+            cli_kind=CliParamKind.OPTION,
             descr=args_doc_dict[name],
             default_value=param.default,
             annot=param.annotation,
