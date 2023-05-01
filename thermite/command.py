@@ -204,7 +204,7 @@ class Command(MutableMapping):
                         return undeque(input_args_deque)
         return []
 
-    def invoke_subcommand(self, name: str) -> "Command":
+    def get_subcommand(self, name: str) -> "Command":
         if name in self.subcommands:
             res_obj = self.param_group.value
 

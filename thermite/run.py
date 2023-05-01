@@ -24,8 +24,9 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
         if len(input_args) > 0:
             input_args = cmd.process(input_args)
         if len(input_args) > 0:
-            cmd = cmd.invoke_subcommand(input_args[0])
+            subcmd = cmd.get_subcommand(input_args[0])
             input_args = input_args[1:]
+            cmd = subcmd
         else:
             try:
                 return cmd.param_group.value
