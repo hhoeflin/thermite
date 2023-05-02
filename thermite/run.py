@@ -6,8 +6,8 @@ from typing import Any, Callable, List, Optional, Union
 from attrs import mutable
 
 from thermite.exceptions import RichExcHandler, ThermiteExcHandler
+from thermite.plugins.help import help_callback
 
-from .callbacks import help_callback
 from .command import Command
 from .config import Config, Event
 from .exceptions import CommandError, ParameterError

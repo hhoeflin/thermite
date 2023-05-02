@@ -1,9 +1,10 @@
 import re
+import sys
 from typing import Any, Dict, List, Optional, Union, _type_repr
 
 from attrs import field, mutable
 from rich import box
-from rich.console import ConsoleRenderable, Group, RichCast
+from rich.console import Console, ConsoleRenderable, Group, RichCast
 from rich.panel import Panel
 from rich.protocol import rich_cast
 from rich.table import Table
@@ -292,3 +293,14 @@ def command_to_help(cmd: Command) -> CommandHelp:
         opt_group=opt_group,
         subcommands=subcommands,
     )
+
+
+def help_callback_func(cmd: Command) -> None:
+    console = Console()
+    console.print(command_to_help(cmd))
+    sys.exit(0)
+
+
+help_callback = CliCallback(
+    callback=help_callback_func, triggers=["--help"], descr="Display the help message"
+)
