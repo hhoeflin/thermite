@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.text import Text
 
 from thermite.command import CliCallback, Command
+from thermite.config import Config, EventCallbacks
 from thermite.parameters import Argument, Option, ParameterGroup
 
 
@@ -202,18 +203,26 @@ class OptionGroupHelp:
         )
 
 
-def param_group_to_help_opts_only(pg: ParameterGroup) -> OptionGroupHelp:
+def param_group_to_help_opts_only(
+    pg: ParameterGroup, config: Config
+) -> OptionGroupHelp:
     cli_opts = pg.cli_opts
 
     cli_opts_single = [x for x in cli_opts if isinstance(x, Option)]
     cli_opts_group = [x for x in cli_opts if isinstance(x, ParameterGroup)]
 
-    return OptionGroupHelp(
+    opt_grp_help = OptionGroupHelp(
         name=pg.name,
         descr=pg.descr,
         gen_opts=[option_to_help(x) for x in cli_opts_single],
-        opt_groups=[param_group_to_help_opts_only(x) for x in cli_opts_group],
+        opt_groups=[
+            param_group_to_help_opts_only(x, config=config) for x in cli_opts_group
+        ],
     )
+    for cb in config.get_event_cbs("HELP_PG_CREATE"):
+        opt_grp_help = cb(pg, opt_grp_help)
+
+    return opt_grp_help
 
 
 def create_commands_panel(subcommands: Dict[str, Optional[str]]) -> Optional[Panel]:
@@ -278,14 +287,14 @@ def command_to_help(cmd: Command) -> CommandHelp:
 
     # the options don't need a special name or description;
     # that is intended for subgroups
-    opt_group = param_group_to_help_opts_only(cmd.param_group)
+    opt_group = param_group_to_help_opts_only(cmd.param_group, config=cmd.config)
     opt_group.name = "Options"
     opt_group.descr = None
 
     # last we need the subcommands and their descriptions
     subcommands = {key: obj.descr for key, obj in cmd.subcommands.items()}
 
-    return CommandHelp(
+    cmd_help = CommandHelp(
         descr=cmd.param_group.descr,
         usage=cmd.usage,
         args=args,
@@ -293,6 +302,9 @@ def command_to_help(cmd: Command) -> CommandHelp:
         opt_group=opt_group,
         subcommands=subcommands,
     )
+    for cb in cmd.config.get_event_cbs("HELP_CMD_CREATE"):
+        cmd_help = cb(cmd, cmd_help)
+    return cmd_help
 
 
 def help_callback_func(cmd: Command) -> None:

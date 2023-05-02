@@ -14,19 +14,20 @@ class Config:
     Configuration parameters.
 
     Args:
-        config_param1: First parameter
-        config_para2: Second parameter
+        param1: First parameter
+        param2: Second parameter
     """
 
-    config_param1: str
-    config_param2: Path = Path("foo/bar")
+    param1: str
+    param2: Path = Path("foo/bar")
 
 
-def example(param1: str, param2: float, param3: List[int], param4: Config):
+def example(param1: str, param2: float, param3: List[int], config: Config):
     print(f"param1: {param1}")
     print(f"param2: {param2}")
     print(f"param3: {param3}")
-    print(f"param4: {param4}")
+    print(f"config: {config}")
+
 
 if __name__ == "__main__":
     run(example)

@@ -6,6 +6,8 @@ from typing import Any, Callable, Dict, Optional, Type
 from attrs import field, mutable
 from docstring_parser import Docstring, parse
 
+from thermite.config import Event, EventCallbacks, standardize_obj
+
 
 class CliParamKind(Enum):
     OPTION = "OPTION"
@@ -143,3 +145,20 @@ def process_instance_to_obj_signature(obj: Any) -> ObjSignature:
         short_descr=short_descr,
         long_descr=long_descr,
     )
+
+
+def match_obj_filter_sig(
+    obj_to_match: Any, cb: Callable[[Any, "ObjSignature"], "ObjSignature"]
+) -> Callable[[Any, "ObjSignature"], "ObjSignature"]:
+    std_obj_to_match = standardize_obj(obj_to_match)
+
+    def filtered_callback(obj: Any, sig: "ObjSignature") -> "ObjSignature":
+        if standardize_obj(obj) == std_obj_to_match:
+            return cb(obj, sig)
+        else:
+            return sig
+
+    return filtered_callback
+
+
+EventCallbacks.default_event_obj_filters[Event.SIG_EXTRACT] = match_obj_filter_sig

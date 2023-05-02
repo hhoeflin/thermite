@@ -20,7 +20,7 @@ from typing import (
 from attrs import field, mutable
 from loguru import logger
 
-from thermite.config import Config
+from thermite.config import Config, Event, EventCallbacks, standardize_obj
 from thermite.signatures import extract_descriptions
 from thermite.utils import clify_argname
 
@@ -257,3 +257,21 @@ class Command(MutableMapping):
     @property
     def name(self) -> str:
         return self.param_group.name
+
+
+def match_obj_filter_cmd(
+    obj_to_match: Any, cb: Callable[["Command"], "Command"]
+) -> Callable[["Command"], "Command"]:
+    std_obj_to_match = standardize_obj(obj_to_match)
+
+    def filtered_callback(cmd: "Command") -> "Command":
+        if standardize_obj(cmd.param_group.obj) == std_obj_to_match:
+            return cb(cmd)
+        else:
+            return cmd
+
+    return filtered_callback
+
+
+EventCallbacks.default_event_obj_filters[Event.CMD_POST_CREATE] = match_obj_filter_cmd
+EventCallbacks.default_event_obj_filters[Event.CMD_POST_PROCESS] = match_obj_filter_cmd

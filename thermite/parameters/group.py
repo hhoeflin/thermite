@@ -1,11 +1,12 @@
 import inspect
 from collections.abc import MutableMapping
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
 from typing_extensions import assert_never
 
+from thermite.config import Event, EventCallbacks, standardize_obj
 from thermite.exceptions import (
     DuplicatedTriggerError,
     MultiParameterError,
@@ -315,3 +316,20 @@ class ParameterGroup(MutableMapping):
                 assert_never(opt)
 
         return all_trigger_mappings
+
+
+def match_obj_filter_pg(
+    obj_to_match: Any, cb: Callable[["ParameterGroup"], "ParameterGroup"]
+) -> Callable[["ParameterGroup"], "ParameterGroup"]:
+    std_obj_to_match = standardize_obj(obj_to_match)
+
+    def filtered_callback(pg: "ParameterGroup") -> "ParameterGroup":
+        if standardize_obj(pg.obj) == std_obj_to_match:
+            return cb(pg)
+        else:
+            return pg
+
+    return filtered_callback
+
+
+EventCallbacks.default_event_obj_filters[Event.PG_POST_CREATE] = match_obj_filter_pg
