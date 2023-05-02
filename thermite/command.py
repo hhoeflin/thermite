@@ -21,7 +21,6 @@ from attrs import field, mutable
 from loguru import logger
 
 from thermite.config import Config
-from thermite.help import CbHelp, CommandHelp
 from thermite.signatures import extract_descriptions
 from thermite.utils import clify_argname
 
@@ -56,9 +55,6 @@ class CliCallback:
             return args[(1 + num_args_use) :]
         else:
             raise Exception("Callback was raised without appropriate trigger.")
-
-    def help(self) -> CbHelp:
-        return CbHelp(triggers=", ".join(self.triggers), descr=self.descr)
 
 
 @mutable
@@ -261,26 +257,3 @@ class Command(MutableMapping):
     @property
     def name(self) -> str:
         return self.param_group.name
-
-    def help(self) -> CommandHelp:
-        # argument help to show
-        args = [x.help() for x in self.param_group.cli_args]
-        cbs = [x.help() for x in self.config.cli_callbacks + self.local_cli_callbacks]
-
-        # the options don't need a special name or description;
-        # that is intended for subgroups
-        opt_group = self.param_group.help_opts_only()
-        opt_group.name = "Options"
-        opt_group.descr = None
-
-        # last we need the subcommands and their descriptions
-        subcommands = {key: obj.descr for key, obj in self.subcommands.items()}
-
-        return CommandHelp(
-            descr=self.param_group.descr,
-            usage=self.usage,
-            args=args,
-            callbacks=cbs,
-            opt_group=opt_group,
-            subcommands=subcommands,
-        )

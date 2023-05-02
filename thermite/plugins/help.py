@@ -1,4 +1,5 @@
-from typing import Any, Dict, List, Optional, Union
+import re
+from typing import Any, Dict, List, Optional, Union, _type_repr
 
 from attrs import field, mutable
 from rich import box
@@ -8,21 +9,51 @@ from rich.protocol import rich_cast
 from rich.table import Table
 from rich.text import Text
 
+from thermite.command import CliCallback, Command
+from thermite.parameters import Argument, Option, ParameterGroup
 
-@mutable(kw_only=True)
+
+def clean_type_str(obj) -> str:
+    type_descr = _type_repr(obj)
+
+    # clean out all modulenames
+    p = re.compile(r"([a-zA-Z0-9_]+\.)([a-zA-Z0-9_]+)")
+    num_repl = 1
+    while num_repl > 0:
+        type_descr, num_repl = p.subn(r"\2", type_descr)
+
+    return type_descr
+
+
+@mutable()
 class ProcessorHelp:
     triggers: str
     type_descr: str
 
 
-@mutable(kw_only=True)
+@mutable()
 class OptHelp:
     processors: List[ProcessorHelp]
     default: str
     descr: str
 
 
-@mutable(kw_only=True)
+def option_to_help(opt: Option) -> OptHelp:
+    default_str = str(opt.default_value) if opt.default_value != ... else ""
+
+    return OptHelp(
+        processors=[
+            ProcessorHelp(
+                triggers=", ".join(x.triggers), type_descr=clean_type_str(x.res_type)
+            )
+            for x in opt.processors
+        ],
+        default=default_str,
+        descr=opt.descr if opt.descr is not None else "",
+    )
+
+
+@mutable()
 class ArgHelp:
     name: str
     type_descr: str
@@ -30,10 +61,24 @@ class ArgHelp:
     descr: str
 
 
-@mutable(kw_only=True)
+def argument_to_help(arg: Argument) -> ArgHelp:
+    default_str = str(arg.default_value) if arg.default_value != ... else ""
+    return ArgHelp(
+        name=arg.name,
+        type_descr=clean_type_str(arg.res_type),
+        default=default_str,
+        descr=arg.descr if arg.descr is not None else "",
+    )
+
+
+@mutable()
 class CbHelp:
     triggers: str
     descr: str
+
+
+def clicb_to_help(clicb: CliCallback) -> CbHelp:
+    return CbHelp(triggers=", ".join(clicb.triggers), descr=clicb.descr)
 
 
 def opt_help_list_to_table(opts: List[OptHelp]) -> Optional[Table]:
@@ -156,6 +201,20 @@ class OptionGroupHelp:
         )
 
 
+def param_group_to_help_opts_only(pg: ParameterGroup) -> OptionGroupHelp:
+    cli_opts = pg.cli_opts
+
+    cli_opts_single = [x for x in cli_opts if isinstance(x, Option)]
+    cli_opts_group = [x for x in cli_opts if isinstance(x, ParameterGroup)]
+
+    return OptionGroupHelp(
+        name=pg.name,
+        descr=pg.descr,
+        gen_opts=[option_to_help(x) for x in cli_opts_single],
+        opt_groups=[param_group_to_help_opts_only(x) for x in cli_opts_group],
+    )
+
+
 def create_commands_panel(subcommands: Dict[str, Optional[str]]) -> Optional[Panel]:
     if len(subcommands) == 0:
         return None
@@ -209,3 +268,27 @@ class CommandHelp:
         if cmd_panel is not None:
             elements.append(cmd_panel)
         return Group(*elements)
+
+
+def command_to_help(cmd: Command) -> CommandHelp:
+    # argument help to show
+    args = [argument_to_help(x) for x in cmd.param_group.cli_args]
+    cbs = [clicb_to_help(x) for x in cmd.config.cli_callbacks + cmd.local_cli_callbacks]
+
+    # the options don't need a special name or description;
+    # that is intended for subgroups
+    opt_group = param_group_to_help_opts_only(cmd.param_group)
+    opt_group.name = "Options"
+    opt_group.descr = None
+
+    # last we need the subcommands and their descriptions
+    subcommands = {key: obj.descr for key, obj in cmd.subcommands.items()}
+
+    return CommandHelp(
+        descr=cmd.param_group.descr,
+        usage=cmd.usage,
+        args=args,
+        callbacks=cbs,
+        opt_group=opt_group,
+        subcommands=subcommands,
+    )

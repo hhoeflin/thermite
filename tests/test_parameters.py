@@ -274,7 +274,7 @@ class TestOption:
             processors=[
                 ConvertOnceTriggerProcessor(
                     triggers=triggers,
-                    type_str="Path",
+                    res_type=Path,
                     type_converter=PathCLIArgConverter(Path),
                 )
             ],
@@ -304,7 +304,7 @@ class TestOption:
             processors=[
                 ConvertOnceTriggerProcessor(
                     triggers=("--path", "-p"),
-                    type_str="Path",
+                    res_type=Path,
                     type_converter=PathCLIArgConverter(Path),
                 )
             ],
@@ -328,7 +328,7 @@ class TestOption:
             processors=[
                 ConvertListTriggerProcessor(
                     triggers=("--path", "-p"),
-                    type_str="Path",
+                    res_type=Path,
                     type_converter=PathCLIArgConverter(Path),
                 )
             ],
@@ -352,7 +352,7 @@ class TestOption:
             processors=[
                 ConvertListTriggerProcessor(
                     triggers=("--path", "-p"),
-                    type_str="Path",
+                    res_type=Path,
                     type_converter=PathCLIArgConverter(Path),
                 )
             ],
@@ -378,7 +378,7 @@ class TestArgument:
                 )
             ),
             type_converter=PathCLIArgConverter(Path),
-            type_str="Path",
+            res_type=Path,
         )
         return arg
 

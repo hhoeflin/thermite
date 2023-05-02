@@ -1,24 +1,11 @@
 """Utilities for the package."""
 
-import re
 from enum import Enum
-from typing import Dict, Type, _type_repr
+from typing import Dict, Type
 
 
 def clify_argname(x: str) -> str:
     return x.replace("_", "-")
-
-
-def clean_type_str(obj) -> str:
-    type_descr = _type_repr(obj)
-
-    # clean out all modulenames
-    p = re.compile(r"([a-zA-Z0-9_]+\.)([a-zA-Z0-9_]+)")
-    num_repl = 1
-    while num_repl > 0:
-        type_descr, num_repl = p.subn(r"\2", type_descr)
-
-    return type_descr
 
 
 class ClassContentType(Enum):

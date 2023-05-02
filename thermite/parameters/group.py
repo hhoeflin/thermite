@@ -12,7 +12,6 @@ from thermite.exceptions import (
     ParameterError,
     TriggerError,
 )
-from thermite.help import OptionGroupHelp
 from thermite.type_converters import split_args_by_nargs
 
 from .base import Argument, Option, Parameter
@@ -316,16 +315,3 @@ class ParameterGroup(MutableMapping):
                 assert_never(opt)
 
         return all_trigger_mappings
-
-    def help_opts_only(self) -> OptionGroupHelp:
-        cli_opts = self.cli_opts
-
-        cli_opts_single = [x for x in cli_opts if isinstance(x, Option)]
-        cli_opts_group = [x for x in cli_opts if isinstance(x, ParameterGroup)]
-
-        return OptionGroupHelp(
-            name=self.name,
-            descr=self.descr,
-            gen_opts=[x.help() for x in cli_opts_single],
-            opt_groups=[x.help_opts_only() for x in cli_opts_group],
-        )

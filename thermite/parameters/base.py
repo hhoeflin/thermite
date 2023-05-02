@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Type
 
 from attrs import field, mutable
 from exceptiongroup import ExceptionGroup
 
 from thermite.exceptions import ParameterError, TriggerError
-from thermite.help import ArgHelp, OptHelp, ProcessorHelp
 from thermite.signatures import ParameterSignature
 from thermite.type_converters import (
     CLIArgConverterBase,
@@ -137,18 +136,6 @@ class Option(Parameter):
 
         return ret_args
 
-    def help(self) -> OptHelp:
-        default_str = str(self.default_value) if self.default_value != ... else ""
-
-        return OptHelp(
-            processors=[
-                ProcessorHelp(triggers=", ".join(x.triggers), type_descr=x.type_str)
-                for x in self.processors
-            ],
-            default=default_str,
-            descr=self.descr if self.descr is not None else "",
-        )
-
     def to_argument(self) -> "Argument":
         # to convert it to an argument, we need a processor of subclass
         # ConvertTriggerProcessor
@@ -162,11 +149,11 @@ class Option(Parameter):
                     target_type=List[inner_converter._target_type],  # type: ignore
                     inner_converter=proc.type_converter,
                 )
-                type_str = proc.type_str
+                res_type = proc.res_type
                 break
             elif isinstance(proc, ConvertTriggerProcessor):
                 type_converter = proc.type_converter  # type: ignore
-                type_str = proc.type_str
+                res_type = proc.res_type
                 break
 
         if type_converter is None:
@@ -179,7 +166,7 @@ class Option(Parameter):
             descr=self.descr,
             default_value=self.default_value,
             annot=self.annot,
-            type_str=type_str,
+            res_type=res_type,
             type_converter=type_converter,
         )
 
@@ -188,7 +175,7 @@ class Option(Parameter):
 
 @mutable(kw_only=True)
 class Argument(Parameter):
-    type_str: str
+    res_type: Type
     type_converter: CLIArgConverterBase
 
     def process(self, args: Sequence[str]) -> Sequence[str]:
@@ -207,12 +194,3 @@ class Argument(Parameter):
             self._exceptions.append(e)
 
         return ret_args
-
-    def help(self) -> ArgHelp:
-        default_str = str(self.default_value) if self.default_value != ... else ""
-        return ArgHelp(
-            name=self.name,
-            type_descr=self.type_str,
-            default=default_str,
-            descr=self.descr if self.descr is not None else "",
-        )

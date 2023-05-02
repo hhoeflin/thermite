@@ -1,9 +1,4 @@
-from pathlib import Path
-from typing import Union
-
-import pytest
-
-from thermite.utils import ClassContentType, analyze_class, clean_type_str
+from thermite.utils import ClassContentType, analyze_class
 
 
 class A:
@@ -33,8 +28,3 @@ def test_analyze_class():
         "d": ClassContentType.property,
         "e": ClassContentType.classvar,
     }
-
-
-def test_clean_type_str():
-    assert clean_type_str(int) == "int"
-    assert clean_type_str(Union[int, Path]) == "Union[int, Path]"

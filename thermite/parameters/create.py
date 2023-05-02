@@ -23,7 +23,7 @@ from thermite.signatures import (
     process_function_to_obj_signature,
     process_instance_to_obj_signature,
 )
-from thermite.utils import clean_type_str, clify_argname
+from thermite.utils import clify_argname
 
 from .base import Option, Parameter
 from .group import ParameterGroup
@@ -57,7 +57,7 @@ def process_parameter(
                 ConvertListTriggerProcessor(
                     triggers=[f"--{clify_argname(param_sig.name)}"],
                     type_converter=conv,
-                    type_str=clean_type_str(annot_to_use),
+                    res_type=annot_to_use,
                 )
             ],
         )
@@ -88,7 +88,7 @@ def process_parameter(
                     ConvertListTriggerProcessor(
                         triggers=[f"--{clify_argname(param_sig.name)}"],
                         type_converter=conv,
-                        type_str=clean_type_str(param_sig.annot),
+                        res_type=param_sig.annot,
                     )
                 ],
             )
@@ -101,7 +101,7 @@ def process_parameter(
                         ConvertReplaceTriggerProcessor(
                             triggers=[f"--{clify_argname(param_sig.name)}"],
                             type_converter=conv,
-                            type_str=clean_type_str(param_sig.annot),
+                            res_type=param_sig.annot,
                         )
                     ],
                 )
@@ -143,10 +143,10 @@ def bool_option(
         prefix=prefix,
         processors=[
             ConstantTriggerProcessor(
-                triggers=pos_triggers, type_str="Bool", constant=True
+                triggers=pos_triggers, res_type=bool, constant=True
             ),
             ConstantTriggerProcessor(
-                triggers=neg_triggers, type_str="Bool", constant=False
+                triggers=neg_triggers, res_type=bool, constant=False
             ),
         ],
     )

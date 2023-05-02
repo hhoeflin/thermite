@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Sequence, Set
+from typing import Any, List, Sequence, Set, Type
 
 from attrs import field, mutable
 
@@ -15,7 +15,7 @@ def str_list_conv(x: Sequence[str]) -> List[str]:
 class TriggerProcessor(ABC):
     prefix: str = field(default="", init=False)
     _triggers: List[str] = field(converter=str_list_conv)
-    type_str: str
+    res_type: Type
 
     @property
     def triggers(self) -> List[str]:
