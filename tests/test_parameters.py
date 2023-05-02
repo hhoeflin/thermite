@@ -394,7 +394,7 @@ class TestParamGroup:
             NestedClass,
             config=Config(),
             name="test",
-            child_prefix_omit_name=True,
+            prefix_this="",
         )
         res.default_value = NestedClass(a=1)
         return res

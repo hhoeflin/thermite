@@ -112,7 +112,7 @@ def process_parameter(
                         klass=param_sig.annot,
                         config=config,
                         name=param_sig.name,
-                        child_prefix_omit_name=False,
+                        prefix_this=param_sig.name,
                     )
                     res.default_value = param_sig.default_value
                 else:
@@ -191,7 +191,7 @@ def process_obj_signature_to_param_group(
     obj_sig: ObjSignature,
     config: Config,
     name: str,
-    child_prefix_omit_name: bool,
+    prefix_this: str,
     omit_first: bool,
 ) -> ParameterGroup:
     posargs, varposargs, kwargs = process_param_sig_dict(
@@ -204,7 +204,7 @@ def process_obj_signature_to_param_group(
         obj=obj,
         expected_ret_type=obj_sig.return_annot,
         name=name,
-        child_prefix_omit_name=child_prefix_omit_name,
+        prefix_this=prefix_this,
         posargs=posargs,
         varposargs=varposargs,
         kwargs=kwargs,
@@ -214,7 +214,7 @@ def process_obj_signature_to_param_group(
 
 
 def process_function_to_param_group(
-    func: Callable, config: Config, name: str, child_prefix_omit_name: bool
+    func: Callable, config: Config, name: str, prefix_this: str
 ) -> ParameterGroup:
     obj_sig = process_function_to_obj_signature(func=func)
     # SIG_EXTRACT Event start
@@ -226,7 +226,7 @@ def process_function_to_param_group(
         obj_sig=obj_sig,
         config=config,
         name=name,
-        child_prefix_omit_name=child_prefix_omit_name,
+        prefix_this=prefix_this,
         omit_first=False,
     )
     # PG_POST_CREATE Event start
@@ -237,7 +237,7 @@ def process_function_to_param_group(
 
 
 def process_class_to_param_group(
-    klass: Type, config: Config, name: str, child_prefix_omit_name: bool
+    klass: Type, config: Config, name: str, prefix_this: str
 ) -> ParameterGroup:
     obj_sig = process_class_to_obj_signature(klass=klass)
     # SIG_EXTRACT Event start
@@ -249,7 +249,7 @@ def process_class_to_param_group(
         obj_sig=obj_sig,
         config=config,
         name=name,
-        child_prefix_omit_name=child_prefix_omit_name,
+        prefix_this=prefix_this,
         omit_first=True,
     )
     # PG_POST_CREATE Event start
@@ -260,7 +260,7 @@ def process_class_to_param_group(
 
 
 def process_instance_to_param_group(
-    obj: Any, config: Config, name: str, child_prefix_omit_name: bool
+    obj: Any, config: Config, name: str, prefix_this: str
 ) -> ParameterGroup:
     obj_sig = process_instance_to_obj_signature(obj=obj)
     # SIG_EXTRACT Event start
@@ -272,7 +272,7 @@ def process_instance_to_param_group(
         obj_sig=obj_sig,
         config=config,
         name=name,
-        child_prefix_omit_name=child_prefix_omit_name,
+        prefix_this=prefix_this,
         omit_first=False,
     )
     # PG_POST_CREATE Event start

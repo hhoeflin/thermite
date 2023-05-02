@@ -20,7 +20,7 @@ from .base import Argument, Option, Parameter
 EllipsisType = type(...)
 
 
-@mutable(slots=False, kw_only=True)
+@mutable(kw_only=True)
 class ParameterGroup(MutableMapping):
     descr: Optional[str] = None
     obj: Any = None
@@ -29,10 +29,10 @@ class ParameterGroup(MutableMapping):
     _posargs: List[Union[Parameter, "ParameterGroup"]]
     _varposargs: List[Union[Parameter, "ParameterGroup"]]
     _kwargs: Dict[str, Union[Parameter, "ParameterGroup"]]
-    _prefix: str = ""
+    _prefix_parent: str = ""
+    _prefix_this: str = ""
     _name: str = ""
     _num_bound: int = field(default=0, init=False)
-    _child_prefix_omit_name: bool = True
 
     def __attrs_post_init__(self):
         self._set_prefix_children()
@@ -143,25 +143,37 @@ class ParameterGroup(MutableMapping):
         # - child_prefix_omit_name
         # If any of these changes, it should be reset
         prefixes = []
-        if self.prefix != "":
-            prefixes.append(self.prefix)
+        if self.prefix_parent != "":
+            prefixes.append(self.prefix_parent)
 
-        if not self.child_prefix_omit_name and self.name != "":
-            prefixes.append(self.name)
+        if self.prefix_this != "":
+            prefixes.append(self.prefix_this)
 
         return "-".join(prefixes)
 
     def _set_prefix_children(self):
         for opt in self.cli_opts:
-            opt.prefix = self.child_prefix
+            if isinstance(opt, ParameterGroup):
+                opt.prefix_parent = self.child_prefix
+            else:
+                opt.prefix = self.child_prefix
 
     @property
-    def prefix(self) -> str:
-        return self._prefix
+    def prefix_this(self) -> str:
+        return self._prefix_this
 
-    @prefix.setter
-    def prefix(self, prefix: str):
-        self._prefix = prefix
+    @prefix_this.setter
+    def prefix_this(self, prefix_this: str):
+        self._prefix_this = prefix_this
+        self._set_prefix_children()
+
+    @property
+    def prefix_parent(self) -> str:
+        return self._prefix_parent
+
+    @prefix_parent.setter
+    def prefix_parent(self, prefix_parent: str):
+        self._prefix_parent = prefix_parent
         self._set_prefix_children()
 
     @property
@@ -330,6 +342,5 @@ def match_obj_filter_pg(
             return pg
 
     return filtered_callback
-
 
 EventCallbacks.default_event_obj_filters[Event.PG_POST_CREATE] = match_obj_filter_pg
