@@ -213,7 +213,7 @@ def param_group_to_help_opts_only(
 
     opt_grp_help = OptionGroupHelp(
         name=pg.name,
-        descr=pg.descr,
+        descr=pg.short_descr,
         gen_opts=[option_to_help(x) for x in cli_opts_single],
         opt_groups=[
             param_group_to_help_opts_only(x, config=config) for x in cli_opts_group
@@ -295,7 +295,7 @@ def command_to_help(cmd: Command) -> CommandHelp:
     subcommands = {key: obj.descr for key, obj in cmd.subcommands.items()}
 
     cmd_help = CommandHelp(
-        descr=cmd.param_group.descr,
+        descr=cmd.param_group.short_descr,
         usage=cmd.usage,
         args=args,
         callbacks=cbs,

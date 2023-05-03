@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Sequence, Type
+from typing import Any, Dict, List, Sequence, Type
 
 from attrs import field, mutable
 from exceptiongroup import ExceptionGroup

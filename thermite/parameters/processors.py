@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Sequence, Set, Type
+from typing import Any, List, Sequence, Type
 
 from attrs import field, mutable
 

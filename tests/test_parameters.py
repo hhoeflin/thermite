@@ -391,10 +391,7 @@ class TestArgument:
 class TestParamGroup:
     def param_group(self) -> ParameterGroup:
         res = process_class_to_param_group(
-            NestedClass,
-            config=Config(),
-            name="test",
-            prefix_this="",
+            NestedClass, config=Config(), name="test", prefix_this="", python_kind=None
         )
         res.default_value = NestedClass(a=1)
         return res

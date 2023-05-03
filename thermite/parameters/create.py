@@ -4,8 +4,8 @@ from typing import (
     Callable,
     Dict,
     List,
+    Optional,
     Sequence,
-    Tuple,
     Type,
     Union,
     get_args,
@@ -110,6 +110,7 @@ def process_parameter(
                 if inspect.isclass(param_sig.annot):
                     res = process_class_to_param_group(
                         klass=param_sig.annot,
+                        python_kind=param_sig.python_kind,
                         config=config,
                         name=param_sig.name,
                         prefix_this=param_sig.name,
@@ -156,15 +157,9 @@ def process_param_sig_dict(
     params: Dict[str, ParameterSignature],
     omit_first: bool,
     config: Config,
-) -> Tuple[
-    List[Union[Parameter, ParameterGroup]],
-    List[Union[Parameter, ParameterGroup]],
-    Dict[str, Union[Parameter, ParameterGroup]],
-]:
-    posargs = []
-    varposargs = []
-    kwargs = {}
-    for count, param in enumerate(params.values()):
+) -> Dict[str, Union[Parameter, ParameterGroup]]:
+    ret_params = {}
+    for count, (name, param) in enumerate(params.items()):
         if omit_first and count == 0:
             # this is self
             continue
@@ -176,45 +171,45 @@ def process_param_sig_dict(
                     param_sig=param,
                     config=config,
                 )
-                if param.python_kind == inspect.Parameter.POSITIONAL_ONLY:
-                    posargs.append(cli_param)
-                elif param.python_kind == inspect.Parameter.VAR_POSITIONAL:
-                    varposargs.append(cli_param)
-                else:
-                    kwargs[param.name] = cli_param
+                ret_params[name] = cli_param
 
-    return (posargs, varposargs, kwargs)
+    return ret_params
 
 
 def process_obj_signature_to_param_group(
     obj: Any,
     obj_sig: ObjSignature,
+    python_kind: Optional[inspect._ParameterKind],
     config: Config,
     name: str,
     prefix_this: str,
     omit_first: bool,
 ) -> ParameterGroup:
-    posargs, varposargs, kwargs = process_param_sig_dict(
+    params = process_param_sig_dict(
         obj_sig.params,
         omit_first=omit_first,
         config=config,
     )
     param_group = ParameterGroup(
-        descr=obj_sig.short_descr,
+        short_descr=obj_sig.short_descr,
+        long_descr=obj_sig.long_descr,
+        python_kind=python_kind,
         obj=obj,
-        expected_ret_type=obj_sig.return_annot,
+        return_annot=obj_sig.return_annot,
         name=name,
         prefix_this=prefix_this,
-        posargs=posargs,
-        varposargs=varposargs,
-        kwargs=kwargs,
+        params=params,
     )
 
     return param_group
 
 
 def process_function_to_param_group(
-    func: Callable, config: Config, name: str, prefix_this: str
+    func: Callable,
+    python_kind: Optional[inspect._ParameterKind],
+    config: Config,
+    name: str,
+    prefix_this: str,
 ) -> ParameterGroup:
     obj_sig = process_function_to_obj_signature(func=func)
     # SIG_EXTRACT Event start
@@ -224,6 +219,7 @@ def process_function_to_param_group(
     pg = process_obj_signature_to_param_group(
         obj=func,
         obj_sig=obj_sig,
+        python_kind=python_kind,
         config=config,
         name=name,
         prefix_this=prefix_this,
@@ -237,7 +233,11 @@ def process_function_to_param_group(
 
 
 def process_class_to_param_group(
-    klass: Type, config: Config, name: str, prefix_this: str
+    klass: Type,
+    python_kind: Optional[inspect._ParameterKind],
+    config: Config,
+    name: str,
+    prefix_this: str,
 ) -> ParameterGroup:
     obj_sig = process_class_to_obj_signature(klass=klass)
     # SIG_EXTRACT Event start
@@ -247,6 +247,7 @@ def process_class_to_param_group(
     pg = process_obj_signature_to_param_group(
         obj=klass,
         obj_sig=obj_sig,
+        python_kind=python_kind,
         config=config,
         name=name,
         prefix_this=prefix_this,
@@ -260,7 +261,11 @@ def process_class_to_param_group(
 
 
 def process_instance_to_param_group(
-    obj: Any, config: Config, name: str, prefix_this: str
+    obj: Any,
+    python_kind: Optional[inspect._ParameterKind],
+    config: Config,
+    name: str,
+    prefix_this: str,
 ) -> ParameterGroup:
     obj_sig = process_instance_to_obj_signature(obj=obj)
     # SIG_EXTRACT Event start
@@ -270,6 +275,7 @@ def process_instance_to_param_group(
     pg = process_obj_signature_to_param_group(
         obj=lambda: obj,
         obj_sig=obj_sig,
+        python_kind=python_kind,
         config=config,
         name=name,
         prefix_this=prefix_this,

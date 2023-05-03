@@ -1,5 +1,3 @@
-import sys
-
 from prettyprinter import install_extras, pprint
 
 from .command import CliCallback, Command

@@ -1,6 +1,6 @@
 import inspect
 from collections.abc import MutableMapping
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 from attrs import field, mutable
 from beartype.door import is_bearable
@@ -13,6 +13,7 @@ from thermite.exceptions import (
     ParameterError,
     TriggerError,
 )
+from thermite.signatures import CliParamKind
 from thermite.type_converters import split_args_by_nargs
 
 from .base import Argument, Option, Parameter
@@ -22,36 +23,25 @@ EllipsisType = type(...)
 
 @mutable(kw_only=True)
 class ParameterGroup(MutableMapping):
-    descr: Optional[str] = None
+    name: str = ""
+    short_descr: Optional[str] = None
+    long_descr: Optional[str] = None
+    return_annot: Type
     obj: Any = None
     default_value: Any = field(default=...)
-    _expected_ret_type: object = None
-    _posargs: List[Union[Parameter, "ParameterGroup"]]
-    _varposargs: List[Union[Parameter, "ParameterGroup"]]
-    _kwargs: Dict[str, Union[Parameter, "ParameterGroup"]]
+    python_kind: Optional[inspect._ParameterKind]
+    params: Dict[str, Union[Parameter, "ParameterGroup"]] = field(factory=dict)
     _prefix_parent: str = ""
     _prefix_this: str = ""
-    _name: str = ""
     _num_bound: int = field(default=0, init=False)
 
     def __attrs_post_init__(self):
         self._set_prefix_children()
-        if self._expected_ret_type == inspect._empty:
-            self._expected_ret_type = type(None)
+        if self.return_annot == inspect._empty:
+            self.return_annot = type(None)
 
     def __getitem__(self, key) -> Union[Parameter, "ParameterGroup"]:
-        for param in self._posargs:
-            if param.name == key:
-                return param
-
-        for param in self._varposargs:
-            if param.name == key:
-                return param
-
-        if key in self._kwargs:
-            return self._kwargs[key]
-
-        raise KeyError(f"Parameter with name {key} not found.")
+        return self.params[key]
 
     def __setitem__(self, key, value):
         if not isinstance(value, Parameter) or isinstance(value, ParameterGroup):
@@ -62,41 +52,20 @@ class ParameterGroup(MutableMapping):
                 "The name of the parameter being set has to be equal to the key"
             )
 
-        for i, param in enumerate(self._posargs):
-            if key == param.name:
-                self._posargs[i] = value
-                return
-
-        for i, param in enumerate(self._varposargs):
-            if key == param.name:
-                self._varposargs[i] = value
-                return
-
-        if key in self._kwargs:
-            self._kwargs[key] = value
-            return
-
-        raise KeyError(f"Parameter with name {key} not found.")
+        self.params[key] = value
 
     def __delitem__(self, key):
-        del key
-        raise Exception("Deleting of paraeters not possible.")
+        del self.params[key]
 
     def __len__(self) -> int:
-        return len(self._posargs) + len(self._varposargs) + len(self._kwargs)
+        return len(self.params)
 
     def __iter__(self):
-        for param in self._posargs:
-            yield param.name
-
-        for param in self._varposargs:
-            yield param.name
-
-        yield from self._kwargs
+        return self.params.__iter__()
 
     def _exec_obj(self) -> Any:
         if self.obj is None:
-            raise ParameterError(f"No object specified in ParameterGroup {self._name}")
+            raise ParameterError(f"No object specified in ParameterGroup {self.name}")
 
         # check if all the input parameters are ok
         args = self.args_values_with_excs
@@ -107,7 +76,7 @@ class ParameterGroup(MutableMapping):
 
         if len(caught_errors) > 0:
             raise MultiParameterError(
-                f"Caught {len(caught_errors)} in parameters of ParameterGroup '{self._name}'",
+                f"Caught {len(caught_errors)} in parameters of ParameterGroup '{self.name}'",
                 caught_errors,
             )
 
@@ -116,24 +85,49 @@ class ParameterGroup(MutableMapping):
                 res_obj = self.obj(*self.args_values, **self.kwargs_values)
             except Exception as e:
                 raise ParameterError(
-                    f"Error processing object in ParameterGroup {self._name}"
+                    f"Error processing object in ParameterGroup {self.name}"
                 ) from e
-            if not is_bearable(res_obj, self._expected_ret_type):
+            if not is_bearable(res_obj, self.return_annot):
                 raise ParameterError(
-                    f"Expected return type {str(self._expected_ret_type)} "
-                    f"but got {str(type(res_obj))} in ParameterGroup '{self._name}'"
+                    f"Expected return type {str(self.return_annot)} "
+                    f"but got {str(type(res_obj))} in ParameterGroup '{self.name}'"
                 )
         elif inspect.isclass(self.obj):
             try:
                 res_obj = self.obj(*self.args_values, **self.kwargs_values)
             except Exception as e:
                 raise ParameterError(
-                    f"Error processing object in ParameterGroup {self._name}"
+                    f"Error processing object in ParameterGroup {self.name}"
                 ) from e
         else:
             raise NotImplementedError()
 
         return res_obj
+
+    @property
+    def posargs(self) -> List[Union[Parameter, "ParameterGroup"]]:
+        return [
+            p
+            for p in self.values()
+            if p.python_kind == inspect.Parameter.POSITIONAL_ONLY
+        ]
+
+    @property
+    def varposargs(self) -> List[Union[Parameter, "ParameterGroup"]]:
+        return [
+            p
+            for p in self.values()
+            if p.python_kind == inspect.Parameter.VAR_POSITIONAL
+        ]
+
+    @property
+    def kwargs(self) -> Dict[str, Union[Parameter, "ParameterGroup"]]:
+        return {
+            k: p
+            for k, p in self.items()
+            if p.python_kind
+            in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        }
 
     @property
     def child_prefix(self) -> str:
@@ -177,15 +171,6 @@ class ParameterGroup(MutableMapping):
         self._set_prefix_children()
 
     @property
-    def name(self) -> str:
-        return self._name
-
-    @name.setter
-    def name(self, name: str):
-        self._name = name
-        self._set_prefix_children()
-
-    @property
     def child_prefix_omit_name(self) -> bool:
         return self._child_prefix_omit_name
 
@@ -222,12 +207,12 @@ class ParameterGroup(MutableMapping):
         return input_args
 
     def _num_params(self) -> int:
-        return len(self._posargs) + len(self._varposargs) + len(self._kwargs)
+        return len(self.posargs) + len(self.varposargs) + len(self.kwargs)
 
     @property
     def args_values(self) -> Tuple[Any, ...]:
-        res = [x.value for x in self._posargs]
-        for arg in self._varposargs:
+        res = [x.value for x in self.posargs]
+        for arg in self.varposargs:
             res.extend(arg.value)
 
         return tuple(res)
@@ -235,12 +220,12 @@ class ParameterGroup(MutableMapping):
     @property
     def args_values_with_excs(self) -> Tuple[Any, ...]:
         res = []
-        for x in self._posargs:
+        for x in self.posargs:
             try:
                 res.append(x.value)
             except Exception as e:
                 res.append(e)
-        for arg in self._varposargs:
+        for arg in self.varposargs:
             try:
                 res.extend(arg.value)
             except Exception as e:
@@ -250,12 +235,12 @@ class ParameterGroup(MutableMapping):
 
     @property
     def kwargs_values(self) -> Dict[str, Any]:
-        return {key: arg.value for key, arg in self._kwargs.items()}
+        return {key: arg.value for key, arg in self.kwargs.items()}
 
     @property
     def kwargs_values_with_excs(self) -> Dict[str, Any]:
         res = {}
-        for key, arg in self._kwargs.items():
+        for key, arg in self.kwargs.items():
             try:
                 res[key] = arg.value
             except Exception as e:
@@ -280,25 +265,25 @@ class ParameterGroup(MutableMapping):
         except ParameterError:
             raise
         except Exception as e:
-            raise ParameterError(f"Error in ParameterGroup '{self._name}'") from e
+            raise ParameterError(f"Error in ParameterGroup '{self.name}'") from e
 
     @property
     def cli_args(self) -> List[Argument]:
-        posargs_args = [x for x in self._posargs if isinstance(x, Argument)]
-        varposarg_args = [x for x in self._varposargs if isinstance(x, Argument)]
-        kwargs_args = [x for x in self._kwargs.values() if isinstance(x, Argument)]
+        posargs_args = [x for x in self.posargs if isinstance(x, Argument)]
+        varposarg_args = [x for x in self.varposargs if isinstance(x, Argument)]
+        kwargs_args = [x for x in self.kwargs.values() if isinstance(x, Argument)]
         return posargs_args + varposarg_args + kwargs_args
 
     @property
     def cli_opts(self) -> List[Union[Option, "ParameterGroup"]]:
         posargs_opts = [
-            x for x in self._posargs if isinstance(x, (Option, ParameterGroup))
+            x for x in self.posargs if isinstance(x, (Option, ParameterGroup))
         ]
         varposarg_opts = [
-            x for x in self._varposargs if isinstance(x, (Option, ParameterGroup))
+            x for x in self.varposargs if isinstance(x, (Option, ParameterGroup))
         ]
         kwargs_opts = [
-            x for x in self._kwargs.values() if isinstance(x, (Option, ParameterGroup))
+            x for x in self.kwargs.values() if isinstance(x, (Option, ParameterGroup))
         ]
         return posargs_opts + varposarg_opts + kwargs_opts
 

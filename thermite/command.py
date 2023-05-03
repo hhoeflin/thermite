@@ -143,18 +143,18 @@ class Command(MutableMapping):
     @classmethod
     def _from_function(cls, func: Callable, name: str, config: Config):
         param_group = process_function_to_param_group(
-            func, config=config, name=name, prefix_this=""
+            func, config=config, name=name, prefix_this="", python_kind=None
         )
         return cls(
             param_group=param_group,
             config=config,
-            subcommands=extract_subcommands(param_group._expected_ret_type),
+            subcommands=extract_subcommands(param_group.return_annot),
         )
 
     @classmethod
     def _from_instance(cls, obj: Any, name: str, config: Config):
         param_group = process_instance_to_param_group(
-            obj, config=config, name=name, prefix_this=""
+            obj, config=config, name=name, prefix_this="", python_kind=None
         )
         return cls(
             param_group=param_group,
@@ -165,7 +165,7 @@ class Command(MutableMapping):
     @classmethod
     def _from_class(cls, klass: Type, name: str, config: Config):
         param_group = process_class_to_param_group(
-            klass, config=config, name=name, prefix_this=""
+            klass, config=config, name=name, prefix_this="", python_kind=None
         )
         return cls(
             param_group=param_group,
