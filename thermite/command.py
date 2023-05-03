@@ -234,7 +234,8 @@ class Command(MutableMapping):
                     getattr(res_obj, "__call__"), name=name, config=self.config
                 )
             subcommand.prev_cmd = self
-
+            # add the command as the last item of the history
+            self._add_history([name], [])
             return subcommand
         else:
             raise UnknownCommandError(f"Unknown subcommand {name}")

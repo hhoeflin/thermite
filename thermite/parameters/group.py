@@ -13,7 +13,6 @@ from thermite.exceptions import (
     ParameterError,
     TriggerError,
 )
-from thermite.signatures import CliParamKind
 from thermite.type_converters import split_args_by_nargs
 
 from .base import Argument, Option, Parameter
@@ -146,7 +145,7 @@ class ParameterGroup(MutableMapping):
         return "-".join(prefixes)
 
     def _set_prefix_children(self):
-        for opt in self.cli_opts:
+        for opt in self.cli_opts.values():
             if isinstance(opt, ParameterGroup):
                 opt.prefix_parent = self.child_prefix
             else:
@@ -195,7 +194,7 @@ class ParameterGroup(MutableMapping):
                 raise TriggerError(f"No option with trigger {input_args[0]}")
 
         else:
-            for argument in self.cli_args:
+            for argument in self.cli_args.values():
                 if argument.unset:
                     self._num_bound += 1
                     args_use, args_remain = split_args_by_nargs(
@@ -268,29 +267,19 @@ class ParameterGroup(MutableMapping):
             raise ParameterError(f"Error in ParameterGroup '{self.name}'") from e
 
     @property
-    def cli_args(self) -> List[Argument]:
-        posargs_args = [x for x in self.posargs if isinstance(x, Argument)]
-        varposarg_args = [x for x in self.varposargs if isinstance(x, Argument)]
-        kwargs_args = [x for x in self.kwargs.values() if isinstance(x, Argument)]
-        return posargs_args + varposarg_args + kwargs_args
+    def cli_args(self) -> Dict[str, Argument]:
+        return {k: v for k, v in self.items() if isinstance(v, Argument)}
 
     @property
-    def cli_opts(self) -> List[Union[Option, "ParameterGroup"]]:
-        posargs_opts = [
-            x for x in self.posargs if isinstance(x, (Option, ParameterGroup))
-        ]
-        varposarg_opts = [
-            x for x in self.varposargs if isinstance(x, (Option, ParameterGroup))
-        ]
-        kwargs_opts = [
-            x for x in self.kwargs.values() if isinstance(x, (Option, ParameterGroup))
-        ]
-        return posargs_opts + varposarg_opts + kwargs_opts
+    def cli_opts(self) -> Dict[str, Union[Option, "ParameterGroup"]]:
+        return {
+            k: v for k, v in self.items() if isinstance(v, (Option, ParameterGroup))
+        }
 
     @property
     def final_trigger_map(self) -> Dict[str, Union[Option, "ParameterGroup"]]:
         all_trigger_mappings: Dict[str, Union[Option, "ParameterGroup"]] = {}
-        for opt in self.cli_opts:
+        for opt in self.cli_opts.values():
             if isinstance(opt, Option):
                 for trigger in opt.final_triggers:
                     if trigger in all_trigger_mappings:
@@ -327,5 +316,6 @@ def match_obj_filter_pg(
             return pg
 
     return filtered_callback
+
 
 EventCallbacks.default_event_obj_filters[Event.PG_POST_CREATE] = match_obj_filter_pg
