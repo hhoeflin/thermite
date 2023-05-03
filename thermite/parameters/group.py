@@ -68,8 +68,8 @@ class ParameterGroup(MutableMapping):
             raise ParameterError(f"No object specified in ParameterGroup {self.name}")
 
         # check if all the input parameters are ok
-        args = self.args_values_with_excs
-        kwargs = self.kwargs_values_with_excs
+        args = self.py_args_values_with_excs
+        kwargs = self.py_kwargs_values_with_excs
         caught_errors = [x for x in args if isinstance(x, ParameterError)] + [
             v for v in kwargs.values() if isinstance(v, ParameterError)
         ]
@@ -82,7 +82,7 @@ class ParameterGroup(MutableMapping):
 
         if inspect.isfunction(self.obj) or inspect.ismethod(self.obj):
             try:
-                res_obj = self.obj(*self.args_values, **self.kwargs_values)
+                res_obj = self.obj(*self.py_args_values, **self.py_kwargs_values)
             except Exception as e:
                 raise ParameterError(
                     f"Error processing object in ParameterGroup {self.name}"
@@ -94,7 +94,7 @@ class ParameterGroup(MutableMapping):
                 )
         elif inspect.isclass(self.obj):
             try:
-                res_obj = self.obj(*self.args_values, **self.kwargs_values)
+                res_obj = self.obj(*self.py_args_values, **self.py_kwargs_values)
             except Exception as e:
                 raise ParameterError(
                     f"Error processing object in ParameterGroup {self.name}"
@@ -210,7 +210,7 @@ class ParameterGroup(MutableMapping):
         return len(self.posargs) + len(self.varposargs) + len(self.kwargs)
 
     @property
-    def args_values(self) -> Tuple[Any, ...]:
+    def py_args_values(self) -> Tuple[Any, ...]:
         res = [x.value for x in self.posargs]
         for arg in self.varposargs:
             res.extend(arg.value)
@@ -218,7 +218,7 @@ class ParameterGroup(MutableMapping):
         return tuple(res)
 
     @property
-    def args_values_with_excs(self) -> Tuple[Any, ...]:
+    def py_args_values_with_excs(self) -> Tuple[Any, ...]:
         res = []
         for x in self.posargs:
             try:
@@ -234,11 +234,11 @@ class ParameterGroup(MutableMapping):
         return tuple(res)
 
     @property
-    def kwargs_values(self) -> Dict[str, Any]:
+    def py_kwargs_values(self) -> Dict[str, Any]:
         return {key: arg.value for key, arg in self.kwargs.items()}
 
     @property
-    def kwargs_values_with_excs(self) -> Dict[str, Any]:
+    def py_kwargs_values_with_excs(self) -> Dict[str, Any]:
         res = {}
         for key, arg in self.kwargs.items():
             try:

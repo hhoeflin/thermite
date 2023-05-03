@@ -84,12 +84,12 @@ def test_command_process(
             res = command.process(input_args)
             if len(res) > 0:
                 raise UnprocessedArgumentError()
-            assert command.param_group.args_values == output_args
-            assert command.param_group.kwargs_values == output_kwargs
+            assert command.param_group.py_args_values == output_args
+            assert command.param_group.py_kwargs_values == output_kwargs
     else:
         command.process(input_args)
-        assert command.param_group.args_values == output_args
-        assert command.param_group.kwargs_values == output_kwargs
+        assert command.param_group.py_args_values == output_args
+        assert command.param_group.py_kwargs_values == output_kwargs
 
 
 @pytest.mark.parametrize(
