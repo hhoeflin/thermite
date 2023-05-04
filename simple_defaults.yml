@@ -1,0 +1,2 @@
+opts:
+  - ["--param1", "foo"]
