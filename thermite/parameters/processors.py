@@ -13,17 +13,8 @@ def str_list_conv(x: Sequence[str]) -> List[str]:
 
 @mutable(kw_only=True)
 class TriggerProcessor(ABC):
-    prefix: str = field(default="", init=False)
-    _triggers: List[str] = field(converter=str_list_conv)
+    triggers: List[str] = field(converter=str_list_conv)
     res_type: Type
-
-    @property
-    def triggers(self) -> List[str]:
-        if self.prefix == "":
-            return self._triggers
-        else:
-            filtered_triggers = filter(lambda x: x.startswith("--"), self._triggers)
-            return [f"--{self.prefix}-{trigger[2:]}" for trigger in filtered_triggers]
 
     @abstractmethod
     def bind(self, args: Sequence[str]) -> Sequence[str]:

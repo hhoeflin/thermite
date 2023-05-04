@@ -35,7 +35,7 @@ from .processors import (
 
 
 def process_parameter(
-    param_sig: ParameterSignature, config: Config
+    param_sig: ParameterSignature, prefix: str, config: Config
 ) -> Union[Parameter, ParameterGroup]:
     """
     Process a python parameter into a thermite parameter
@@ -44,6 +44,11 @@ def process_parameter(
     # if no type annotations, it is assumed it is str
     store = config.cli_args_store
     res: Union[Parameter, ParameterGroup]
+    base_trigger_name = (
+        clify_argname(f"{prefix}-{param_sig.name}")
+        if prefix != ""
+        else clify_argname(param_sig.name)
+    )
 
     if param_sig.python_kind == inspect.Parameter.VAR_POSITIONAL:
         # argument list
@@ -55,7 +60,7 @@ def process_parameter(
             **asdict(param_sig),
             processors=[
                 ConvertListTriggerProcessor(
-                    triggers=[f"--{clify_argname(param_sig.name)}"],
+                    triggers=[f"--{base_trigger_name}"],
                     type_converter=conv,
                     res_type=annot_to_use,
                 )
@@ -70,8 +75,8 @@ def process_parameter(
             # need to use a bool-option
             res = bool_option(
                 param_sig=param_sig,
-                pos_triggers=[f"--{clify_argname(param_sig.name)}"],
-                neg_triggers=[f"--no-{clify_argname(param_sig.name)}"],
+                pos_triggers=[f"--{base_trigger_name}"],
+                neg_triggers=[f"--no-{base_trigger_name}"],
             )
         elif get_origin(param_sig.annot) in (List, list, Sequence):
             annot_args = get_args(param_sig.annot)
@@ -86,7 +91,7 @@ def process_parameter(
                 **asdict(param_sig),
                 processors=[
                     ConvertListTriggerProcessor(
-                        triggers=[f"--{clify_argname(param_sig.name)}"],
+                        triggers=[f"--{base_trigger_name}"],
                         type_converter=conv,
                         res_type=param_sig.annot,
                     )
@@ -99,7 +104,7 @@ def process_parameter(
                     **asdict(param_sig),
                     processors=[
                         ConvertReplaceTriggerProcessor(
-                            triggers=[f"--{clify_argname(param_sig.name)}"],
+                            triggers=[f"--{base_trigger_name}"],
                             type_converter=conv,
                             res_type=param_sig.annot,
                         )
@@ -113,7 +118,7 @@ def process_parameter(
                         python_kind=param_sig.python_kind,
                         config=config,
                         name=param_sig.name,
-                        prefix_this=param_sig.name,
+                        prefix=base_trigger_name,
                     )
                     res.default_value = param_sig.default_value
                 else:
@@ -137,11 +142,9 @@ def bool_option(
     param_sig: ParameterSignature,
     pos_triggers: Sequence[str],
     neg_triggers: Sequence[str],
-    prefix: str = "",
 ):
     return Option(
         **asdict(param_sig),
-        prefix=prefix,
         processors=[
             ConstantTriggerProcessor(
                 triggers=pos_triggers, res_type=bool, constant=True
@@ -155,6 +158,7 @@ def bool_option(
 
 def process_param_sig_dict(
     params: Dict[str, ParameterSignature],
+    prefix: str,
     omit_first: bool,
     config: Config,
 ) -> Dict[str, Union[Parameter, ParameterGroup]]:
@@ -168,8 +172,7 @@ def process_param_sig_dict(
                 continue
             else:
                 cli_param = process_parameter(
-                    param_sig=param,
-                    config=config,
+                    param_sig=param, config=config, prefix=prefix
                 )
                 ret_params[name] = cli_param
 
@@ -182,11 +185,12 @@ def process_obj_signature_to_param_group(
     python_kind: Optional[inspect._ParameterKind],
     config: Config,
     name: str,
-    prefix_this: str,
+    prefix: str,
     omit_first: bool,
 ) -> ParameterGroup:
     params = process_param_sig_dict(
         obj_sig.params,
+        prefix=prefix,
         omit_first=omit_first,
         config=config,
     )
@@ -197,7 +201,6 @@ def process_obj_signature_to_param_group(
         obj=obj,
         return_annot=obj_sig.return_annot,
         name=name,
-        prefix_this=prefix_this,
         params=params,
     )
 
@@ -209,7 +212,7 @@ def process_function_to_param_group(
     python_kind: Optional[inspect._ParameterKind],
     config: Config,
     name: str,
-    prefix_this: str,
+    prefix: str,
 ) -> ParameterGroup:
     obj_sig = process_function_to_obj_signature(func=func)
     # SIG_EXTRACT Event start
@@ -222,7 +225,7 @@ def process_function_to_param_group(
         python_kind=python_kind,
         config=config,
         name=name,
-        prefix_this=prefix_this,
+        prefix=prefix,
         omit_first=False,
     )
     # PG_POST_CREATE Event start
@@ -237,7 +240,7 @@ def process_class_to_param_group(
     python_kind: Optional[inspect._ParameterKind],
     config: Config,
     name: str,
-    prefix_this: str,
+    prefix: str,
 ) -> ParameterGroup:
     obj_sig = process_class_to_obj_signature(klass=klass)
     # SIG_EXTRACT Event start
@@ -250,7 +253,7 @@ def process_class_to_param_group(
         python_kind=python_kind,
         config=config,
         name=name,
-        prefix_this=prefix_this,
+        prefix=prefix,
         omit_first=True,
     )
     # PG_POST_CREATE Event start
@@ -265,7 +268,7 @@ def process_instance_to_param_group(
     python_kind: Optional[inspect._ParameterKind],
     config: Config,
     name: str,
-    prefix_this: str,
+    prefix: str,
 ) -> ParameterGroup:
     obj_sig = process_instance_to_obj_signature(obj=obj)
     # SIG_EXTRACT Event start
@@ -278,7 +281,7 @@ def process_instance_to_param_group(
         python_kind=python_kind,
         config=config,
         name=name,
-        prefix_this=prefix_this,
+        prefix=prefix,
         omit_first=False,
     )
     # PG_POST_CREATE Event start

@@ -79,24 +79,7 @@ class Parameter(ABC, ParameterSignature):
 class Option(Parameter):
     """Base class for Options."""
 
-    _prefix: str = ""
     _processors: List[TriggerProcessor]
-
-    def __attrs_post_init__(self):
-        self._set_processor_prefix()
-
-    def _set_processor_prefix(self):
-        for processor in self.processors:
-            processor.prefix = self._prefix
-
-    @property
-    def prefix(self) -> str:
-        return self._prefix
-
-    @prefix.setter
-    def prefix(self, prefix: str):
-        self._prefix = prefix
-        self._set_processor_prefix()
 
     @property
     def processors(self) -> List[TriggerProcessor]:

@@ -41,53 +41,19 @@ def test_protocol_checks_option_correct():
 
 class TestBoolOption:
     @pytest.mark.parametrize(
-        "pos_triggers,neg_triggers,prefix,args,return_args,val_exp",
+        "pos_triggers,neg_triggers,args,return_args,val_exp",
         [
-            (("-y", "--yes"), ("-n", "--no"), "", ["-y"], [], True),
-            (("-y", "--yes"), ("-n", "--no"), "", ["--yes"], [], True),
-            (("-y", "--yes"), ("-n", "--no"), "", ["-n"], [], False),
-            (("-y", "--yes"), ("-n", "--no"), "", ["--no"], [], False),
-            (("-y", "--yes"), ("-n", "--no"), "", ["-y", "other"], ["other"], True),
-            (("-y", "--yes"), ("-n", "--no"), "", ["-a"], [], TriggerError),
-            (
-                ("-y", "--yes"),
-                ("-n", "--no"),
-                "group",
-                ["-y"],
-                [],
-                TriggerError,
-            ),
-            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-yes"], [], True),
-            (
-                ("-y", "--yes"),
-                ("-n", "--no"),
-                "group",
-                ["-n"],
-                [],
-                TriggerError,
-            ),
-            (
-                ("-y", "--yes"),
-                ("-n", "--no"),
-                "group",
-                ["--yes"],
-                [],
-                TriggerError,
-            ),
-            (
-                ("-y", "--yes"),
-                ("-n", "--no"),
-                "group",
-                ["-n"],
-                [],
-                TriggerError,
-            ),
-            (("-y", "--yes"), ("-n", "--no"), "group", ["--group-no"], [], False),
+            (("-y", "--yes"), ("-n", "--no"), ["-y"], [], True),
+            (("-y", "--yes"), ("-n", "--no"), ["--yes"], [], True),
+            (("-y", "--yes"), ("-n", "--no"), ["-n"], [], False),
+            (("-y", "--yes"), ("-n", "--no"), ["--no"], [], False),
+            (("-y", "--yes"), ("-n", "--no"), ["-y", "other"], ["other"], True),
+            (("-y", "--yes"), ("-n", "--no"), ["-a"], [], TriggerError),
+            (("-y", "--group-yes"), ("-n", "--group-no"), ["--group-yes"], [], True),
+            (("-y", "--yes"), ("-n", "--group-no"), ["--group-no"], [], False),
         ],
     )
-    def test_normal(
-        self, pos_triggers, neg_triggers, prefix, args, return_args, val_exp
-    ):
+    def test_normal(self, pos_triggers, neg_triggers, args, return_args, val_exp):
         """Test that BoolOption works as expected."""
 
         opt = bool_option(
@@ -101,7 +67,6 @@ class TestBoolOption:
             ),
             pos_triggers=pos_triggers,
             neg_triggers=neg_triggers,
-            prefix=prefix,
         )
         if type(val_exp) == type and issubclass(val_exp, Exception):
             # raises an error
@@ -124,7 +89,6 @@ class TestBoolOption:
             ),
             pos_triggers=("-a",),
             neg_triggers=(),
-            prefix="",
         )
         with pytest.raises(ParameterError):
             opt.value
@@ -141,7 +105,6 @@ class TestBoolOption:
             ),
             pos_triggers=("-a",),
             neg_triggers=(),
-            prefix="",
         )
         with pytest.raises(TriggerError):
             opt.process([])
@@ -158,7 +121,6 @@ class TestBoolOption:
             ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            prefix="",
         )
         opt.process(["--yes"])
         assert opt.value is True
@@ -178,7 +140,6 @@ class TestBoolOption:
             ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            prefix="",
         )
         assert isinstance(opt, Option)
 
@@ -194,7 +155,6 @@ class TestBoolOption:
             ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            prefix="",
         )
         assert isinstance(opt, Parameter)
 
@@ -210,7 +170,6 @@ class TestBoolOption:
             ),
             pos_triggers=("--yes",),
             neg_triggers=("--no",),
-            prefix="",
         )
         with pytest.raises(Exception, match="Can't convert option to argument"):
             opt.to_argument()
@@ -218,46 +177,21 @@ class TestBoolOption:
 
 class TestOption:
     @pytest.mark.parametrize(
-        "triggers,prefix,args,return_args, val_exp",
+        "triggers,args,return_args, val_exp",
         [
-            (("--path", "-p"), "", ["--path", "/a/b"], [], Path("/a/b")),
-            (("--path", "-p"), "", ["-p", "/a/b"], [], Path("/a/b")),
+            (("--path", "-p"), ["--path", "/a/b"], [], Path("/a/b")),
+            (("--path", "-p"), ["-p", "/a/b"], [], Path("/a/b")),
             (
                 ("--path", "-p"),
-                "",
                 ["--path", "/a/b", "other"],
                 ["other"],
                 Path("/a/b"),
             ),
-            (("--path", "-p"), "", ["-a", "/a/b"], [], TriggerError),
-            (("--path", "-p"), "", ["--foo", "/a/b"], [], TriggerError),
-            (("--path", "-p"), "group", ["--group-path", "/a/b"], [], Path("/a/b")),
-            (
-                ("--path", "-p"),
-                "group",
-                ["--path", "/a/b"],
-                [],
-                TriggerError,
-            ),
-            (("--path", "-p"), "group", ["-p", "/a/b"], [], TriggerError),
-            (
-                ("--path", "-p"),
-                "group",
-                ["--group-path", "/a/b", "other"],
-                ["other"],
-                Path("/a/b"),
-            ),
-            (("--path", "-p"), "group", ["-a", "/a/b"], [], TriggerError),
-            (
-                ("--path", "-p"),
-                "group",
-                ["--foo", "/a/b"],
-                [],
-                TriggerError,
-            ),
+            (("--path", "-p"), ["-a", "/a/b"], [], TriggerError),
+            (("--path", "-p"), ["--foo", "/a/b"], [], TriggerError),
         ],
     )
-    def test_normal(self, triggers, prefix, args, return_args, val_exp):
+    def test_normal(self, triggers, args, return_args, val_exp):
         """Test that BoolOption works as expected."""
 
         opt = Option(
@@ -278,7 +212,6 @@ class TestOption:
                     type_converter=PathCLIArgConverter(Path),
                 )
             ],
-            prefix=prefix,
         )
         if type(val_exp) == type and issubclass(val_exp, Exception):
             # raises an error
@@ -391,7 +324,7 @@ class TestArgument:
 class TestParamGroup:
     def param_group(self) -> ParameterGroup:
         res = process_class_to_param_group(
-            NestedClass, config=Config(), name="test", prefix_this="", python_kind=None
+            NestedClass, config=Config(), name="test", prefix="", python_kind=None
         )
         res.default_value = NestedClass(a=1)
         return res

@@ -30,12 +30,9 @@ class ParameterGroup(MutableMapping):
     default_value: Any = field(default=...)
     python_kind: Optional[inspect._ParameterKind]
     params: Dict[str, Union[Parameter, "ParameterGroup"]] = field(factory=dict)
-    _prefix_parent: str = ""
-    _prefix_this: str = ""
     _num_bound: int = field(default=0, init=False)
 
     def __attrs_post_init__(self):
-        self._set_prefix_children()
         if self.return_annot == inspect._empty:
             self.return_annot = type(None)
 
@@ -127,56 +124,6 @@ class ParameterGroup(MutableMapping):
             if p.python_kind
             in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
         }
-
-    @property
-    def child_prefix(self) -> str:
-        # note that child prefix depends on
-        # - prefix
-        # - name
-        # - child_prefix_omit_name
-        # If any of these changes, it should be reset
-        prefixes = []
-        if self.prefix_parent != "":
-            prefixes.append(self.prefix_parent)
-
-        if self.prefix_this != "":
-            prefixes.append(self.prefix_this)
-
-        return "-".join(prefixes)
-
-    def _set_prefix_children(self):
-        for opt in self.cli_opts.values():
-            if isinstance(opt, ParameterGroup):
-                opt.prefix_parent = self.child_prefix
-            else:
-                opt.prefix = self.child_prefix
-
-    @property
-    def prefix_this(self) -> str:
-        return self._prefix_this
-
-    @prefix_this.setter
-    def prefix_this(self, prefix_this: str):
-        self._prefix_this = prefix_this
-        self._set_prefix_children()
-
-    @property
-    def prefix_parent(self) -> str:
-        return self._prefix_parent
-
-    @prefix_parent.setter
-    def prefix_parent(self, prefix_parent: str):
-        self._prefix_parent = prefix_parent
-        self._set_prefix_children()
-
-    @property
-    def child_prefix_omit_name(self) -> bool:
-        return self._child_prefix_omit_name
-
-    @child_prefix_omit_name.setter
-    def child_prefix_omit_name(self, child_prefix_omit_name: bool):
-        self._child_prefix_omit_name = child_prefix_omit_name
-        self._set_prefix_children()
 
     def process(self, input_args: Sequence[str]) -> Sequence[str]:
         if len(input_args) == 0:
