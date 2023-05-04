@@ -23,10 +23,10 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
     while True:
         if len(input_args) > 0:
             input_args = cmd.process(input_args)
-            # CMD_POST_PROCESS Event start
-            for cb in cmd.config.get_event_cbs(Event.CMD_POST_PROCESS):
-                cmd = cb(cmd)
-            # CMD_POST_PROCESS Event end
+        # CMD_POST_PROCESS Event start
+        for cb in cmd.config.get_event_cbs(Event.CMD_POST_PROCESS):
+            cmd = cb(cmd)
+        # CMD_POST_PROCESS Event end
         if len(input_args) > 0:
             subcmd = cmd.get_subcommand(input_args[0])
             input_args = input_args[1:]

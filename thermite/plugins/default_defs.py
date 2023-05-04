@@ -206,8 +206,9 @@ def read_default_defs_cb_func(cmd: Command, default_defs_path_str: str):
         default_defs = read_default_defs(default_defs_path)
         if not isinstance(default_defs, DefaultDefs):
             raise Exception(
-                "When no subdefinition-name is given, the file has to"
-                "consist of a single Definition"
+                "When no subdefinition-name is given, the file has to "
+                "consist of a single definition. Here we have "
+                f"{', '.join(default_defs.keys())}."
             )
     else:
         default_defs_path = Path(path_split[0])

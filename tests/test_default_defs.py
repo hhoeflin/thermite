@@ -10,6 +10,7 @@ from thermite.plugins.default_defs import defaults_cli_callback
 from thermite.run import runner_testing
 
 from .examples.simple import simple_example
+from .examples.subcommands import Subcommands
 
 
 @mutable
@@ -33,7 +34,7 @@ def test_simple_ex_default_defs():
     config.event_callbacks.add_event_cb(
         event=Event.CMD_POST_PROCESS, cb=cmd_post_process_recorder
     )
-    output = runner_testing(
+    runner_testing(
         simple_example,
         config=config,
         input_args=[
@@ -41,7 +42,6 @@ def test_simple_ex_default_defs():
             str(Path(__file__).parent / "examples" / "simple_defaults.yml"),
         ],
     )
-    print(output.stdout)
 
     # now check that at the beginning, the defaults where not there
     # and afterwards they were changed
@@ -57,3 +57,40 @@ def test_simple_ex_default_defs():
     cmd_after.param_group["param2"].default_value == 3
     cmd_after.param_group["param3"].default_value == [1, 2]
     cmd_after.param_group["param4"].default_value == Path("foobar/file")
+
+
+def test_subcmds_ex_default_defs():
+    config = Config(cli_callbacks=[defaults_cli_callback])
+    cmd_post_create_recorder = DebugCmdRecord()
+    cmd_post_process_recorder = DebugCmdRecord()
+    config.event_callbacks.add_event_cb(
+        event=Event.CMD_POST_CREATE, cb=cmd_post_create_recorder
+    )
+    config.event_callbacks.add_event_cb(
+        event=Event.CMD_POST_PROCESS, cb=cmd_post_process_recorder
+    )
+    output = runner_testing(
+        Subcommands,
+        config=config,
+        input_args=[
+            "--defaults-file",
+            str(
+                Path(__file__).parent / "examples" / "subcommands_defaults.yml#version1"
+            ),
+            "--global-param1",
+            "file.yml",
+            "--global-param2",
+            "test",
+            "example1",
+        ],
+    )
+    print(output.stdout)
+
+    # now check that at the beginning, the defaults where not there
+    # and afterwards they were changed
+    cmd_before = cmd_post_create_recorder.cmd_copies[1]
+    cmd_after = cmd_post_process_recorder.cmd_copies[1]
+    # values before were unset
+    cmd_before.param_group["param1"].default_value == ...
+    # values after were changed
+    cmd_after.param_group["param1"].default_value == "foo"
