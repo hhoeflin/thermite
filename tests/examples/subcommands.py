@@ -6,6 +6,8 @@ from typing import List
 
 from thermite import run
 from thermite.callbacks import noop_callback, show_bindings_callback
+from thermite.config import Config
+from thermite.plugins.default_defs import defaults_cli_callback
 
 
 class Subcommands:
@@ -22,4 +24,7 @@ class Subcommands:
 
 
 if __name__ == "__main__":
-    run(Subcommands, callbacks=[noop_callback, show_bindings_callback])
+    config = Config(
+        cli_callbacks=[defaults_cli_callback, noop_callback, show_bindings_callback]
+    )
+    run(Subcommands, config=config)
