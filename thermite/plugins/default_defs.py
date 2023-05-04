@@ -24,8 +24,8 @@ class DefaultDefs:
     """Holds the new default value settings."""
 
     opts: List[Union[str, List[str]]] = field(factory=list)
-    args: Dict[str, Union[str, List[str]]] = field(factory=Dict)
-    cmds: Dict[str, "DefaultDefs"] = field(factory=Dict)
+    args: Dict[str, Union[str, List[str]]] = field(factory=dict)
+    cmds: Dict[str, "DefaultDefs"] = field(factory=dict)
 
     def check(self):
         for opt in self.opts:
@@ -86,7 +86,7 @@ def read_default_defs(file: Path) -> Union[DefaultDefs, Dict[str, DefaultDefs]]:
             json.loads(file.read_text()), Union[Dict[str, DefaultDefs], DefaultDefs]
         )
         return default_defs
-    if file.suffix.lower() in [".yaml", "yml"]:
+    if file.suffix.lower() in [".yaml", ".yml"]:
         import cattrs.preconf.pyyaml as cpyyaml
 
         yaml_converter = DefaultDefsConverter(
@@ -149,6 +149,9 @@ def transfer_values_to_defaults(
     value_pg: ParameterGroup, default_pg: ParameterGroup
 ) -> None:
     """Transfer the default value. It will be changed in-place."""
+    import pudb
+
+    pudb.set_trace()
     for name, param in value_pg.items():
         if isinstance(param, ParameterGroup):
             param_default = default_pg[name]
@@ -157,8 +160,8 @@ def transfer_values_to_defaults(
         else:
             if not param.unset:
                 try:
-                    value = param.value()
-                    default_pg[name] = value
+                    value = param.value
+                    default_pg[name].default_value = value
                 except Exception as e:
                     raise Exception(
                         f"In parameter {name} an error occured during "

@@ -4,7 +4,8 @@ Very simple example of a CLI
 from pathlib import Path
 from typing import List
 
-from thermite import run
+from thermite import Config, run
+from thermite.plugins.default_defs import defaults_cli_callback
 
 
 def example(param1: str, param2: float, param3: List[int], param4: Path):
@@ -15,4 +16,5 @@ def example(param1: str, param2: float, param3: List[int], param4: Path):
 
 
 if __name__ == "__main__":
-    run(example)
+    config = Config(cli_callbacks=[defaults_cli_callback])
+    run(example, config=config)
