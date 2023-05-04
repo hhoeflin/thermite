@@ -208,8 +208,8 @@ def param_group_to_help_opts_only(
 ) -> OptionGroupHelp:
     cli_opts = pg.cli_opts
 
-    cli_opts_single = [x for x in cli_opts if isinstance(x, Option)]
-    cli_opts_group = [x for x in cli_opts if isinstance(x, ParameterGroup)]
+    cli_opts_single = [x for x in cli_opts.values() if isinstance(x, Option)]
+    cli_opts_group = [x for x in cli_opts.values() if isinstance(x, ParameterGroup)]
 
     opt_grp_help = OptionGroupHelp(
         name=pg.name,
@@ -282,7 +282,7 @@ class CommandHelp:
 
 def command_to_help(cmd: Command) -> CommandHelp:
     # argument help to show
-    args = [argument_to_help(x) for x in cmd.param_group.cli_args]
+    args = [argument_to_help(x) for x in cmd.param_group.cli_args.values()]
     cbs = [clicb_to_help(x) for x in cmd.config.cli_callbacks + cmd.local_cli_callbacks]
 
     # the options don't need a special name or description;
