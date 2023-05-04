@@ -149,9 +149,6 @@ def transfer_values_to_defaults(
     value_pg: ParameterGroup, default_pg: ParameterGroup
 ) -> None:
     """Transfer the default value. It will be changed in-place."""
-    import pudb
-
-    pudb.set_trace()
     for name, param in value_pg.items():
         if isinstance(param, ParameterGroup):
             param_default = default_pg[name]
@@ -159,14 +156,8 @@ def transfer_values_to_defaults(
             transfer_values_to_defaults(param, param_default)
         else:
             if not param.unset:
-                try:
-                    value = param.value
-                    default_pg[name].default_value = value
-                except Exception as e:
-                    raise Exception(
-                        f"In parameter {name} an error occured during "
-                        "value retrieveal from default definition"
-                    ) from e
+                value = param.value
+                default_pg[name].default_value = value
 
 
 @mutable

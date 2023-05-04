@@ -8,7 +8,7 @@ from thermite import Config, run
 from thermite.plugins.default_defs import defaults_cli_callback
 
 
-def example(param1: str, param2: float, param3: List[int], param4: Path):
+def simple_example(param1: str, param2: float, param3: List[int], param4: Path):
     print(f"param1: {param1}")
     print(f"param2: {param2}")
     print(f"param3: {param3}")
@@ -17,4 +17,4 @@ def example(param1: str, param2: float, param3: List[int], param4: Path):
 
 if __name__ == "__main__":
     config = Config(cli_callbacks=[defaults_cli_callback])
-    run(example, config=config)
+    run(simple_example, config=config)

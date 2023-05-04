@@ -108,7 +108,7 @@ class RunOutput:
     exc: Optional[Exception]
 
 
-def testing_runner(
+def runner_testing(
     obj: Any,
     input_args: List[str],
     config: Optional[Config] = None,

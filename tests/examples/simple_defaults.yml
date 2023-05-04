@@ -1,0 +1,6 @@
+opts:
+  - ["--param1", "foo"]
+  - ["--param2", "3"]
+  - ["--param3", "1"]
+  - ["--param3", "2"]
+  - ["--param4", "foobar/file"]
