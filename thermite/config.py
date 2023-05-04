@@ -67,6 +67,7 @@ class EventCallbacks:
 @mutable(kw_only=True)
 class Config:
     cli_callbacks: List["CliCallback"] = field(factory=list)
+    cli_callbacks_top_level: List["CliCallback"] = field(factory=list)
     cli_args_store: CLIArgConverterStore = field(
         factory=partial(CLIArgConverterStore, add_defaults=True)
     )

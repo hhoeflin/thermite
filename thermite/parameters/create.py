@@ -38,7 +38,7 @@ def process_parameter(
     param_sig: ParameterSignature, config: Config
 ) -> Union[Parameter, ParameterGroup]:
     """
-    Process a function parameter into a thermite parameter
+    Process a python parameter into a thermite parameter
     """
     # find the right type converter
     # if no type annotations, it is assumed it is str

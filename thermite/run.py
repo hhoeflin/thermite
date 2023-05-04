@@ -77,7 +77,7 @@ def run(
         # CMD_POST_CREATE Event end
         # START_ARGS_PRE_PROCESS Event start
         for cb in config.get_event_cbs(Event.START_ARGS_PRE_PROCESS):
-            input_args = cb(cmd, input_args)
+            cmd, input_args = cb(cmd, input_args)
         # START_ARGS_PRE_PROCESS Event end
         return process_all_args(input_args=input_args, cmd=cmd)
     except Exception as input_e:

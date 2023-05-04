@@ -41,7 +41,7 @@ class UnknownCommandError(Exception):
 
 @mutable
 class CliCallback:
-    callback: Callable[["Command"], None]
+    callback: Callable[Any, None]
     triggers: List[str]
     descr: str
     num_req_args: Union[int, slice] = 0
@@ -113,6 +113,8 @@ class Command(MutableMapping):
     def __attrs_post_init__(self):
         if len(self.param_group.cli_args) > 0 and len(self.subcommands) > 0:
             raise Exception("Can't have CLI that has subcommands and arguments")
+        self.local_cli_callbacks.extend(self.config.cli_callbacks_top_level)
+        self.config.cli_callbacks_top_level = []
 
     def __getitem__(self, key) -> Union[Parameter, ParameterGroup]:
         return self.param_group[key]
