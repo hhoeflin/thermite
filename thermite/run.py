@@ -8,7 +8,7 @@ from attrs import mutable
 from thermite.exceptions import RichExcHandler, ThermiteExcHandler
 from thermite.plugins.help import help_callback
 
-from .command import Command
+from .command import CliCallback, Command
 from .config import Config, Event
 from .exceptions import CommandError, ParameterError
 
@@ -55,9 +55,12 @@ def run(
     input_args: List[str] = sys.argv[1:],
     add_thermite_exc_handler: bool = True,
     add_rich_exc_handler: bool = True,
+    cli_callbacks_top_level: Optional[List["CliCallback"]] = None,
 ) -> Any:
     if config is None:
         config = Config()
+    if cli_callbacks_top_level is None:
+        cli_callbacks_top_level = []
 
     if add_help_cb:
         config.add_cli_callback(help_callback)
@@ -71,6 +74,7 @@ def run(
 
     try:
         cmd = Command.from_obj(obj, name=name, config=config)
+        cmd.local_cli_callbacks = cli_callbacks_top_level
         # CMD_POST_CREATE Event start
         for cb in config.get_event_cbs(Event.CMD_POST_CREATE):
             cmd = cb(cmd)
