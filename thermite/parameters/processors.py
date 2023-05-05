@@ -74,7 +74,7 @@ class ConvertOnceTriggerProcessor(ConvertTriggerProcessor):
 
 
 @mutable(kw_only=True)
-class ConvertListTriggerProcessor(ConvertTriggerProcessor):
+class MultiConvertTriggerProcessor(ConvertTriggerProcessor):
     def process(self, value: Any) -> Any:
         append_val = self.type_converter.convert(self.bound_args)
         if not isinstance(value, list):

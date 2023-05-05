@@ -29,8 +29,8 @@ from .base import Option, Parameter
 from .group import ParameterGroup
 from .processors import (
     ConstantTriggerProcessor,
-    ConvertListTriggerProcessor,
     ConvertReplaceTriggerProcessor,
+    MultiConvertTriggerProcessor,
 )
 
 
@@ -59,7 +59,7 @@ def process_parameter(
         res = Option(
             **asdict(param_sig),
             processors=[
-                ConvertListTriggerProcessor(
+                MultiConvertTriggerProcessor(
                     triggers=[f"--{base_trigger_name}"],
                     type_converter=conv,
                     res_type=annot_to_use,
@@ -90,7 +90,7 @@ def process_parameter(
             res = Option(
                 **asdict(param_sig),
                 processors=[
-                    ConvertListTriggerProcessor(
+                    MultiConvertTriggerProcessor(
                         triggers=[f"--{base_trigger_name}"],
                         type_converter=conv,
                         res_type=param_sig.annot,

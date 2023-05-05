@@ -9,10 +9,10 @@ from .create import (
 from .group import ParameterGroup
 from .processors import (
     ConstantTriggerProcessor,
-    ConvertListTriggerProcessor,
     ConvertOnceTriggerProcessor,
     ConvertReplaceTriggerProcessor,
     ConvertTriggerProcessor,
+    MultiConvertTriggerProcessor,
     TriggerProcessor,
 )
 
@@ -28,7 +28,7 @@ __all__ = [
     "process_class_to_param_group",
     "bool_option",
     "ConstantTriggerProcessor",
-    "ConvertListTriggerProcessor",
+    "MultiConvertTriggerProcessor",
     "ConvertOnceTriggerProcessor",
     "ConvertReplaceTriggerProcessor",
     "ConvertTriggerProcessor",

@@ -13,8 +13,8 @@ from thermite.type_converters import (
 )
 
 from .processors import (
-    ConvertListTriggerProcessor,
     ConvertTriggerProcessor,
+    MultiConvertTriggerProcessor,
     TriggerProcessor,
 )
 
@@ -124,7 +124,7 @@ class Option(Parameter):
         # ConvertTriggerProcessor
         type_converter = None
         for proc in self._processors:
-            if isinstance(proc, ConvertListTriggerProcessor):
+            if isinstance(proc, MultiConvertTriggerProcessor):
                 inner_converter = proc.type_converter
                 if not isinstance(inner_converter, CLIArgConverterSimple):
                     raise Exception("Inner type converter needs to be simple")

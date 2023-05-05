@@ -9,9 +9,9 @@ from thermite.config import Config
 from thermite.exceptions import ParameterError, TriggerError, UnspecifiedOptionError
 from thermite.parameters import (
     Argument,
-    ConvertListTriggerProcessor,
     ConvertOnceTriggerProcessor,
     ConvertReplaceTriggerProcessor,
+    MultiConvertTriggerProcessor,
     Option,
     OptionError,
     Parameter,
@@ -259,7 +259,7 @@ class TestOption:
                 )
             ),
             processors=[
-                ConvertListTriggerProcessor(
+                MultiConvertTriggerProcessor(
                     triggers=("--path", "-p"),
                     res_type=Path,
                     type_converter=PathCLIArgConverter(Path),
@@ -283,7 +283,7 @@ class TestOption:
                 )
             ),
             processors=[
-                ConvertListTriggerProcessor(
+                MultiConvertTriggerProcessor(
                     triggers=("--path", "-p"),
                     res_type=Path,
                     type_converter=PathCLIArgConverter(Path),
