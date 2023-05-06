@@ -29,7 +29,7 @@ from .base import Option, Parameter
 from .group import ParameterGroup
 from .processors import (
     ConstantTriggerProcessor,
-    ConvertReplaceTriggerProcessor,
+    ConvertTriggerProcessor,
     MultiConvertTriggerProcessor,
 )
 
@@ -103,10 +103,11 @@ def process_parameter(
                 res = Option(
                     **asdict(param_sig),
                     processors=[
-                        ConvertReplaceTriggerProcessor(
+                        ConvertTriggerProcessor(
                             triggers=[f"--{base_trigger_name}"],
                             type_converter=conv,
                             res_type=param_sig.annot,
+                            allow_replace=False,
                         )
                     ],
                 )

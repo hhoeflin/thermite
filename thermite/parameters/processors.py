@@ -45,6 +45,7 @@ class ConstantTriggerProcessor(TriggerProcessor):
 class ConvertTriggerProcessor(TriggerProcessor):
     type_converter: CLIArgConverterBase
     bound_args: Sequence[str] = field(factory=list, init=False)
+    allow_replace: bool = False
 
     def bind(self, args: Sequence[str]) -> Sequence[str]:
         if len(args) == 0:
@@ -57,18 +58,8 @@ class ConvertTriggerProcessor(TriggerProcessor):
         self.bound_args = args[1 : (1 + num_req_args)]
         return args[(1 + num_req_args) :]
 
-
-@mutable(kw_only=True)
-class ConvertReplaceTriggerProcessor(ConvertTriggerProcessor):
     def process(self, value: Any) -> Any:
-        del value
-        return self.type_converter.convert(self.bound_args)
-
-
-@mutable(kw_only=True)
-class ConvertOnceTriggerProcessor(ConvertTriggerProcessor):
-    def process(self, value: Any) -> Any:
-        if value != ...:
+        if value != ... and not self.allow_replace:
             raise TriggerError("Trigger already used once.")
         return self.type_converter.convert(self.bound_args)
 
