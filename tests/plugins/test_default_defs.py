@@ -4,10 +4,12 @@ from attrs import asdict
 
 from thermite.plugins.default_defs import DefaultDefs, read_default_defs
 
-config_a = DefaultDefs(opts=[["--a", "a"], ["--b", "b"]], args=["c", "d"], cmds=None)
-config_b = DefaultDefs(opts=[["--b", "b"], ["--d", "d"]], args=["c", "d"], cmds=None)
+config_a = DefaultDefs(opts=[["--a", "a"], ["--b", "b"]], args=dict(b=["c", "d"]))
+config_b = DefaultDefs(opts=[["--b", "b"], ["--d", "d"]], args=dict(b=["c", "d"]))
 config_nested = DefaultDefs(
-    opts=[["--b", "b"], ["--d", "d"]], args=["c", "d"], cmds=dict(config_a=config_a)
+    opts=[["--b", "b"], ["--d", "d"]],
+    args=dict(b=["c", "d"]),
+    cmds=dict(config_a=config_a),
 )
 
 

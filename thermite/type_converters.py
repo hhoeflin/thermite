@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     ClassVar,
     Dict,
     List,
@@ -96,6 +98,7 @@ def split_args_by_nargs(
     return (x[:num_args_used], x[num_args_used:])
 
 
+@mutable
 class CLIArgConverterBase(ABC):
     num_req_args: Union[int, slice] = field(init=False)
 
@@ -118,71 +121,55 @@ class CLIArgConverterBase(ABC):
         return args_used(num_offered_args, self.num_req_args)
 
 
-@mutable(slots=False)
-class CLIArgConverterSimple(CLIArgConverterBase):
-    _target_type: Type
-
-
-@mutable(slots=False)
-class BasicCLIArgConverter(CLIArgConverterSimple):
-    _supported_type: ClassVar[Any] = None
-    _bound_arg: Optional[str] = field(default=None, init=False)
+@mutable
+class BasicCLIArgConverter(CLIArgConverterBase):
+    supported_type: Type
+    conv_func: Callable
+    target_type: Type
 
     def __attrs_post_init__(self) -> None:
         self.num_req_args = 1
-        if self._target_type != self._supported_type:
+        if self.target_type != self.supported_type:
             raise TypeError(
-                f"{str(self._target_type)} not same as "
-                f"supported type {str(self._supported_type)}"
+                f"{str(self.target_type)} not same as "
+                f"supported type {str(self.supported_type)}"
             )
 
-    @property
-    def target_type(self) -> Type:
-        return self._target_type
-
     def _convert(self, args: Sequence[str]) -> Any:
-        return self._target_type(*args)
+        return self.conv_func(*args)
 
-
-@mutable(slots=False)
-class StrCLIArgConverter(BasicCLIArgConverter):
-    _supported_type = str
-    _target_type: Type = str
-
-
-@mutable(slots=False)
-class PathCLIArgConverter(BasicCLIArgConverter):
-    _supported_type = Path
-    _target_type: Type = Path
-
-
-@mutable(slots=False)
-class FloatCLIArgConverter(BasicCLIArgConverter):
-    _supported_type = float
-    _target_type: Type = float
-
-
-@mutable(slots=False)
-class IntCLIArgConverter(BasicCLIArgConverter):
-    _supported_type = int
-    _target_type: Type = int
+    @classmethod
+    def factory(
+        cls,
+        target_type: Type,
+        store: "CLIArgConverterStore",
+        supported_type: Type,
+        conv_func: Optional[Callable] = None,
+    ):
+        del store
+        if conv_func is None:
+            conv_func = supported_type
+        return cls(
+            supported_type=supported_type, target_type=target_type, conv_func=conv_func
+        )
 
 
 # TODO: Should the next classes have base BasicCLIArgConverter?
-@mutable(slots=False)
-class LiteralCLIArgConverter(BasicCLIArgConverter):
+@mutable
+class LiteralCLIArgConverter(CLIArgConverterBase):
+    target_type: Type
     _args_mapper: Dict[str, Any] = field(factory=dict, init=False)
 
     def __attrs_post_init__(self) -> None:
         self.num_req_args = 1
-        if not get_origin(self._target_type) == get_origin(Literal["a", "b"]):
-            raise TypeError(f"{str(self._target_type)} is not of type 'Literal'")
-        literal_args = get_args(self._target_type)
+        if not get_origin(self.target_type) == get_origin(Literal["a", "b"]):
+            raise TypeError(f"{str(self.target_type)} is not of type 'Literal'")
+        literal_args = get_args(self.target_type)
         self._args_mapper = {str(arg): arg for arg in literal_args}
         # need to make sure that no args are duplicated
         if len(self._args_mapper) < len(literal_args):
             raise ValueError(
-                f"Type {str(self._target_type)} has duplicate values "
+                f"Type {str(self.target_type)} has duplicate values "
                 "when converted to string."
             )
 
@@ -190,32 +177,45 @@ class LiteralCLIArgConverter(BasicCLIArgConverter):
         if args[0] in self._args_mapper:
             return self._args_mapper[args[0]]
         else:
-            raise ValueError(f"{args[0]} not part of {str(self._target_type)}")
+            raise ValueError(f"{args[0]} not part of {str(self.target_type)}")
+
+    @classmethod
+    def factory(cls, target_type: Type, store: "CLIArgConverterStore"):
+        del store
+        return cls(target_type=target_type)
 
 
-@mutable(slots=False)
-class EnumCLIArgConverter(BasicCLIArgConverter):
+@mutable
+class EnumCLIArgConverter(CLIArgConverterBase):
+    target_type: Type
     _args_mapper: Dict[str, Any] = field(factory=dict, init=False)
 
     def __attrs_post_init__(self) -> None:
         self.num_req_args = 1
-        if not issubclass(self._target_type, Enum):
-            raise TypeError(f"{str(self._target_type)} is not an Enum")
-        self._args_mapper = {e.name: e for e in self._target_type}
+        if not issubclass(self.target_type, Enum):
+            raise TypeError(f"{str(self.target_type)} is not an Enum")
+        self._args_mapper = {e.name: e for e in self.target_type}
 
     def _convert(self, args: Sequence[str]) -> Any:
         if args[0] in self._args_mapper:
             return self._args_mapper[args[0]]
         else:
-            raise ValueError(f"{args[0]} not part of {str(self._target_type)}")
+            raise ValueError(f"{args[0]} not part of {str(self.target_type)}")
+
+    @classmethod
+    def factory(cls, target_type: Type, store: "CLIArgConverterStore"):
+        del store
+        return cls(target_type=target_type)
 
 
-@mutable(slots=False)
-class BoolCLIArgConverter(BasicCLIArgConverter):
+@mutable
+class BoolCLIArgConverter(CLIArgConverterBase):
+    target_type: Type
+
     def __attrs_post_init__(self) -> None:
         self.num_req_args = 1
-        if self._target_type != bool:
-            raise TypeError(f"{str(self._target_type)} is not a boolean")
+        if self.target_type != bool:
+            raise TypeError(f"{str(self.target_type)} is not a boolean")
 
     def _convert(self, args: Sequence[str]) -> Any:
         if args[0].lower() in ("true", "t", "yes"):
@@ -225,85 +225,19 @@ class BoolCLIArgConverter(BasicCLIArgConverter):
         else:
             raise ValueError(f"Can't convert {args[0]} to boolean")
 
-
-@mutable(slots=False)
-class CLIArgConverterCompound(CLIArgConverterBase):
-    _target_type: Type
-
     @classmethod
-    @abstractmethod
-    def from_store(cls, target_type: Type, store: "CLIArgConverterStore"):
-        pass
+    def factory(cls, target_type: Type, store: "CLIArgConverterStore"):
+        del store
+        return cls(target_type=target_type)
 
 
-class CLIArgConverterStore:
-    _converters_with_priority: List[
-        Tuple[Union[Type[CLIArgConverterSimple], Type[CLIArgConverterCompound]], float]
-    ]
-
-    def __init__(self, add_defaults: bool = True):
-        self._converters_with_priority = []
-        if add_defaults:
-            self.add_default_converters()
-
-    def add_converter(
-        self,
-        converter: Union[Type[CLIArgConverterSimple], Type[CLIArgConverterCompound]],
-        priority: float,
-    ):
-        self._converters_with_priority.append((converter, priority))
-        self._converters_with_priority.sort(key=lambda x: x[1], reverse=True)
-
-    def add_default_converters(self):
-        self.add_converter(StrCLIArgConverter, 1)
-        self.add_converter(PathCLIArgConverter, 2)
-        self.add_converter(BoolCLIArgConverter, 3)
-        self.add_converter(FloatCLIArgConverter, 4)
-        self.add_converter(IntCLIArgConverter, 5)
-        self.add_converter(EnumCLIArgConverter, 6)
-        self.add_converter(LiteralCLIArgConverter, 7)
-        self.add_converter(UnionCLIArgConverter, 8)
-        self.add_converter(ListCLIArgConverter, 9)
-        self.add_converter(TupleCLIArgConverter, 10)
-
-    def _get_converter_priority(
-        self, target_type: Type
-    ) -> Tuple[CLIArgConverterBase, float]:
-        for converter_class, priority in self._converters_with_priority:
-            try:
-                converter: CLIArgConverterBase
-                if issubclass(converter_class, CLIArgConverterCompound):
-                    converter = converter_class.from_store(target_type, store=self)
-                elif issubclass(converter_class, CLIArgConverterSimple):
-                    converter = converter_class(target_type)
-                else:
-                    raise Exception("Unexpected converter class")
-                return (converter, priority)
-            except TypeError:
-                pass
-
-        raise TypeError(f"No available converter for {str(target_type)}")
-
-    def get_converter(self, target_type: Type) -> CLIArgConverterBase:
-        return self._get_converter_priority(target_type)[0]
-
-    def get_sorted_converters(
-        self, target_types: Sequence[Type]
-    ) -> List[CLIArgConverterBase]:
-        converters_list = [
-            self._get_converter_priority(target_type) for target_type in target_types
-        ]
-        converters_list.sort(key=lambda x: x[1], reverse=True)
-        return [x[0] for x in converters_list]
-
-
-@mutable(slots=False)
-class UnionCLIArgConverter(CLIArgConverterCompound):
-    _bound_args: List[str] = field(factory=list, init=False)
+@mutable
+class UnionCLIArgConverter(CLIArgConverterBase):
+    target_type: Type
     _converters: List[CLIArgConverterBase] = field(factory=list)
 
     @classmethod
-    def from_store(cls, target_type: Type, store: "CLIArgConverterStore"):
+    def factory(cls, target_type: Type, store: "CLIArgConverterStore"):
         if not get_origin(target_type) == get_origin(Union[int, str]):
             raise TypeError(f"{str(target_type)} is not of type 'Union'")
 
@@ -321,10 +255,6 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
                     " a Union has to be equal"
                 )
 
-    @property
-    def target_type(self) -> Type:
-        return self._target_type
-
     def _convert(self, args: Sequence[str]) -> Any:
         for converter in self._converters:
             try:
@@ -334,13 +264,15 @@ class UnionCLIArgConverter(CLIArgConverterCompound):
         raise ValueError(f"No fitting type found in union for {args}")
 
 
-@mutable(slots=False)
-class ListCLIArgConverter(CLIArgConverterCompound):
-    _bound_args: List[str] = field(factory=list, init=False)
-    _inner_converter: CLIArgConverterBase = field(default=StrCLIArgConverter(str))
+@mutable
+class ListCLIArgConverter(CLIArgConverterBase):
+    target_type: Type
+    inner_converter: CLIArgConverterBase = field(
+        factory=lambda: BasicCLIArgConverter(str, str, str)
+    )
 
     @classmethod
-    def from_store(cls, target_type: Type, store: "CLIArgConverterStore"):
+    def factory(cls, target_type: Type, store: "CLIArgConverterStore"):
         if not get_origin(target_type) == get_origin(List):
             raise TypeError(f"{str(target_type)} is not of type 'List'")
 
@@ -357,14 +289,10 @@ class ListCLIArgConverter(CLIArgConverterCompound):
 
     def __attrs_post_init__(self) -> None:
         # ensure that all converters require the same number of arguments
-        inner_num_args = self._inner_converter.num_req_args
+        inner_num_args = self.inner_converter.num_req_args
         if not isinstance(inner_num_args, int):
             raise TypeError("Inner type can't have variable number of args")
         self.num_req_args = slice(0, None, inner_num_args)
-
-    @property
-    def target_type(self) -> Type:
-        return self._target_type
 
     def _convert(self, args: Sequence[str]) -> Any:
         req_group_args = self.num_req_args.step  # type: ignore
@@ -375,17 +303,17 @@ class ListCLIArgConverter(CLIArgConverterCompound):
         out = []
         for i in range(0, num_args, req_group_args):
             group_args = args[i : (i + req_group_args)]
-            out.append(self._inner_converter.convert(group_args))
+            out.append(self.inner_converter.convert(group_args))
         return out
 
 
-@mutable(slots=False)
-class TupleCLIArgConverter(CLIArgConverterCompound):
-    _bound_args: List[str] = field(factory=list, init=False)
-    _tuple_converters: List[CLIArgConverterBase] = field(factory=list)
+@mutable
+class TupleCLIArgConverter(CLIArgConverterBase):
+    target_type: Type
+    tuple_converters: List[CLIArgConverterBase] = field(factory=list)
 
     @classmethod
-    def from_store(cls, target_type: Type, store: "CLIArgConverterStore"):
+    def factory(cls, target_type: Type, store: "CLIArgConverterStore"):
         if not get_origin(target_type) == get_origin(Tuple):
             raise TypeError(f"{str(target_type)} is not of type 'Tuple'")
 
@@ -398,7 +326,7 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
     def __attrs_post_init__(self) -> None:
         # ensure that all of them have finite number of required args
         self.num_req_args = 0
-        for converter in self._tuple_converters:
+        for converter in self.tuple_converters:
             if not isinstance(converter.num_req_args, int):
                 raise CLIArgConverterError(
                     "Each type as part of a tuple has to have "
@@ -406,16 +334,78 @@ class TupleCLIArgConverter(CLIArgConverterCompound):
                 )
             self.num_req_args += converter.num_req_args
 
-    @property
-    def target_type(self) -> Type:
-        return self._target_type
-
     def _convert(self, args: Sequence[str]) -> Any:
         tuple_out = []
         pos = 0
-        for converter in self._tuple_converters:
+        for converter in self.tuple_converters:
             assert isinstance(converter.num_req_args, int)
             tuple_args = args[pos : (pos + converter.num_req_args)]
             pos = pos + converter.num_req_args
             tuple_out.append(converter.convert(tuple_args))
         return tuple(tuple_out)
+
+
+class CLIArgConverterStore:
+    _converter_factories: List[
+        Tuple[Callable[[Type, "CLIArgConverterStore"], CLIArgConverterBase], float]
+    ]
+
+    def __init__(self, add_defaults: bool = True):
+        self._converter_factories = []
+        if add_defaults:
+            self.add_default_converters()
+
+    def add_converter_factory(
+        self,
+        converter_factory: Callable[
+            [Type, "CLIArgConverterStore"], CLIArgConverterBase
+        ],
+        priority: float,
+    ):
+        self._converter_factories.append((converter_factory, priority))
+        self._converter_factories.sort(key=lambda x: x[1], reverse=True)
+
+    def add_default_converters(self):
+        self.add_converter_factory(
+            partial(BasicCLIArgConverter.factory, supported_type=str), 1
+        )
+        self.add_converter_factory(
+            partial(BasicCLIArgConverter.factory, supported_type=Path), 2
+        )
+        self.add_converter_factory(BoolCLIArgConverter.factory, 3)
+        self.add_converter_factory(
+            partial(BasicCLIArgConverter.factory, supported_type=float), 4
+        )
+        self.add_converter_factory(
+            partial(BasicCLIArgConverter.factory, supported_type=int), 5
+        )
+        self.add_converter_factory(EnumCLIArgConverter.factory, 6)
+        self.add_converter_factory(LiteralCLIArgConverter.factory, 7)
+        self.add_converter_factory(UnionCLIArgConverter.factory, 8)
+        self.add_converter_factory(ListCLIArgConverter.factory, 9)
+        self.add_converter_factory(TupleCLIArgConverter.factory, 10)
+
+    def get_converter_with_priority(
+        self, target_type: Type
+    ) -> Tuple[CLIArgConverterBase, float]:
+        for converter_factory, priority in self._converter_factories:
+            try:
+                converter = converter_factory(target_type, self)
+                return (converter, priority)
+            except TypeError:
+                pass
+
+        raise TypeError(f"No available converter for {str(target_type)}")
+
+    def get_converter(self, target_type: Type) -> CLIArgConverterBase:
+        return self.get_converter_with_priority(target_type)[0]
+
+    def get_sorted_converters(
+        self, target_types: Sequence[Type]
+    ) -> List[CLIArgConverterBase]:
+        converters_list = [
+            self.get_converter_with_priority(target_type)
+            for target_type in target_types
+        ]
+        converters_list.sort(key=lambda x: x[1], reverse=True)
+        return [x[0] for x in converters_list]

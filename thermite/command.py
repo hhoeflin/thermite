@@ -11,6 +11,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Protocol,
     Sequence,
     Type,
     Union,
@@ -39,9 +40,14 @@ class UnknownCommandError(Exception):
     ...
 
 
+class CliCallbackCB(Protocol):
+    def __call__(self, cmd: "Command", *args):
+        ...
+
+
 @mutable
 class CliCallback:
-    callback: Callable[Any, None]
+    callback: CliCallbackCB
     triggers: List[str]
     descr: str
     num_req_args: Union[int, slice] = 0

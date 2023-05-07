@@ -34,7 +34,7 @@ def test_simple_ex_default_defs():
     config.event_callbacks.add_event_cb(
         event=Event.CMD_POST_PROCESS, cb=cmd_post_process_recorder
     )
-    runner_testing(
+    output = runner_testing(
         simple_example,
         config=config,
         input_args=[
@@ -42,6 +42,7 @@ def test_simple_ex_default_defs():
             str(Path(__file__).parent / "examples" / "simple_defaults.yml"),
         ],
     )
+    print(output.stdout)
 
     # now check that at the beginning, the defaults where not there
     # and afterwards they were changed

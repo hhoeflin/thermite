@@ -20,8 +20,8 @@ from thermite.parameters import (
 )
 from thermite.signatures import CliParamKind, ParameterSignature
 from thermite.type_converters import (
+    BasicCLIArgConverter,
     CLIArgConverterStore,
-    PathCLIArgConverter,
     TooFewArgsError,
 )
 
@@ -208,7 +208,7 @@ class TestOption:
                 ConvertTriggerProcessor(
                     triggers=triggers,
                     res_type=Path,
-                    type_converter=PathCLIArgConverter(Path),
+                    type_converter=BasicCLIArgConverter(Path, Path, Path),
                 )
             ],
         )
@@ -237,7 +237,7 @@ class TestOption:
                 ConvertTriggerProcessor(
                     triggers=("--path", "-p"),
                     res_type=Path,
-                    type_converter=PathCLIArgConverter(Path),
+                    type_converter=BasicCLIArgConverter(Path, Path, Path),
                 )
             ],
         )
@@ -261,7 +261,7 @@ class TestOption:
                 MultiConvertTriggerProcessor(
                     triggers=("--path", "-p"),
                     res_type=Path,
-                    type_converter=PathCLIArgConverter(Path),
+                    type_converter=BasicCLIArgConverter(Path, Path, Path),
                 )
             ],
         )
@@ -285,7 +285,7 @@ class TestOption:
                 MultiConvertTriggerProcessor(
                     triggers=("--path", "-p"),
                     res_type=Path,
-                    type_converter=PathCLIArgConverter(Path),
+                    type_converter=BasicCLIArgConverter(Path, Path, Path),
                 )
             ],
         )
@@ -309,7 +309,7 @@ class TestArgument:
                     annot=Path,
                 )
             ),
-            type_converter=PathCLIArgConverter(Path),
+            type_converter=BasicCLIArgConverter(Path, Path, Path),
             res_type=Path,
         )
         return arg

@@ -6,11 +6,7 @@ from exceptiongroup import ExceptionGroup
 
 from thermite.exceptions import ParameterError, TriggerError
 from thermite.signatures import ParameterSignature
-from thermite.type_converters import (
-    CLIArgConverterBase,
-    CLIArgConverterSimple,
-    ListCLIArgConverter,
-)
+from thermite.type_converters import CLIArgConverterBase, ListCLIArgConverter
 
 from .processors import (
     ConvertTriggerProcessor,
@@ -126,10 +122,13 @@ class Option(Parameter):
         for proc in self._processors:
             if isinstance(proc, MultiConvertTriggerProcessor):
                 inner_converter = proc.type_converter
-                if not isinstance(inner_converter, CLIArgConverterSimple):
-                    raise Exception("Inner type converter needs to be simple")
+                if not isinstance(inner_converter.num_req_args, int):
+                    raise Exception(
+                        "Inner type converter needs ask for constant number "
+                        "of arguments"
+                    )
                 type_converter = ListCLIArgConverter(
-                    target_type=List[inner_converter._target_type],  # type: ignore
+                    target_type=List[inner_converter.target_type],  # type: ignore
                     inner_converter=proc.type_converter,
                 )
                 res_type = proc.res_type
