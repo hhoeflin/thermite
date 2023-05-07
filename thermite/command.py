@@ -8,10 +8,10 @@ from inspect import Signature, classify_class_attrs
 from typing import (
     Any,
     Callable,
+    Concatenate,
     Dict,
     List,
     Optional,
-    Protocol,
     Sequence,
     Type,
     Union,
@@ -40,14 +40,9 @@ class UnknownCommandError(Exception):
     ...
 
 
-class CliCallbackCB(Protocol):
-    def __call__(self, cmd: "Command", *args):
-        ...
-
-
 @mutable
 class CliCallback:
-    callback: CliCallbackCB
+    callback: Callable
     triggers: List[str]
     descr: str
     num_req_args: Union[int, slice] = 0

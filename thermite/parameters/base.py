@@ -6,7 +6,11 @@ from exceptiongroup import ExceptionGroup
 
 from thermite.exceptions import ParameterError, TriggerError
 from thermite.signatures import ParameterSignature
-from thermite.type_converters import CLIArgConverterBase, ListCLIArgConverter
+from thermite.type_converters import (
+    CLIArgConverterBase,
+    ListCLIArgConverter,
+    split_args_by_nargs,
+)
 
 from .processors import (
     ConvertTriggerProcessor,
@@ -163,15 +167,15 @@ class Argument(Parameter):
     def process(self, args: Sequence[str]) -> Sequence[str]:
         """Implement of general argument processing."""
         try:
-            num_req_args = self.type_converter.num_requested_args(len(args))
-            bound_args = args[:num_req_args]
-            ret_args = args[num_req_args:]
+            used_args, ret_args = split_args_by_nargs(
+                args, self.type_converter.num_req_args
+            )
         except Exception as e:
             self._exceptions.append(e)
             return []
 
         try:
-            self._value = self.type_converter.convert(bound_args)
+            self._value = self.type_converter.convert(used_args)
         except Exception as e:
             self._exceptions.append(e)
 

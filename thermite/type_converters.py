@@ -116,10 +116,6 @@ class CLIArgConverterBase(ABC):
         check_correct_nargs(len(args), self.num_req_args)
         return self._convert(args)
 
-    @final
-    def num_requested_args(self, num_offered_args: int) -> int:
-        return args_used(num_offered_args, self.num_req_args)
-
 
 @mutable
 class BasicCLIArgConverter(CLIArgConverterBase):

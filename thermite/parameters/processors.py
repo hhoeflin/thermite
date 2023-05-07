@@ -4,7 +4,7 @@ from typing import Any, List, Sequence, Type
 from attrs import field, mutable
 
 from thermite.exceptions import TriggerError
-from thermite.type_converters import CLIArgConverterBase
+from thermite.type_converters import CLIArgConverterBase, split_args_by_nargs
 
 
 def str_list_conv(x: Sequence[str]) -> List[str]:
@@ -53,10 +53,12 @@ class ConvertTriggerProcessor(TriggerProcessor):
         if args[0] not in self.triggers:
             raise TriggerError(f"Trigger {args[0]} not an allowed trigger.")
 
-        num_req_args = self.type_converter.num_requested_args(len(args) - 1)
+        bound_args, ret_args = split_args_by_nargs(
+            args[1:], num_req_args=self.type_converter.num_req_args
+        )
 
-        self.bound_args = args[1 : (1 + num_req_args)]
-        return args[(1 + num_req_args) :]
+        self.bound_args = bound_args
+        return ret_args
 
     def process(self, value: Any) -> Any:
         if value != ... and not self.allow_replace:
@@ -75,10 +77,12 @@ class MultiConvertTriggerProcessor(TriggerProcessor):
         if args[0] not in self.triggers:
             raise TriggerError(f"Trigger {args[0]} not an allowed trigger.")
 
-        num_req_args = self.type_converter.num_requested_args(len(args) - 1)
+        bound_args, ret_args = split_args_by_nargs(
+            args[1:], num_req_args=self.type_converter.num_req_args
+        )
 
-        self.bound_args = args[1 : (1 + num_req_args)]
-        return args[(1 + num_req_args) :]
+        self.bound_args = bound_args
+        return ret_args
 
     def process(self, value: Any) -> Any:
         append_val = self.type_converter.convert(self.bound_args)
