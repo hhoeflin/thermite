@@ -65,7 +65,21 @@ class ConvertTriggerProcessor(TriggerProcessor):
 
 
 @mutable(kw_only=True)
-class MultiConvertTriggerProcessor(ConvertTriggerProcessor):
+class MultiConvertTriggerProcessor(TriggerProcessor):
+    type_converter: CLIArgConverterBase
+    bound_args: Sequence[str] = field(factory=list, init=False)
+
+    def bind(self, args: Sequence[str]) -> Sequence[str]:
+        if len(args) == 0:
+            raise TriggerError("A trigger is expected.")
+        if args[0] not in self.triggers:
+            raise TriggerError(f"Trigger {args[0]} not an allowed trigger.")
+
+        num_req_args = self.type_converter.num_requested_args(len(args) - 1)
+
+        self.bound_args = args[1 : (1 + num_req_args)]
+        return args[(1 + num_req_args) :]
+
     def process(self, value: Any) -> Any:
         append_val = self.type_converter.convert(self.bound_args)
         if not isinstance(value, list):
