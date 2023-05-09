@@ -1,6 +1,7 @@
+import inspect
 import re
 import sys
-from typing import Any, Dict, List, Optional, Union, _type_repr
+from typing import Any, Dict, List, Optional, Union, _type_repr, get_args
 
 from attrs import field, mutable
 from rich import box
@@ -11,8 +12,14 @@ from rich.table import Table
 from rich.text import Text
 
 from thermite.command import CliCallback, Command
-from thermite.config import Config, EventCallbacks
-from thermite.parameters import Argument, Option, ParameterGroup
+from thermite.config import Config
+from thermite.parameters import (
+    Argument,
+    MultiConvertTriggerProcessor,
+    Option,
+    ParameterGroup,
+    TriggerProcessor,
+)
 
 
 def clean_type_str(obj) -> str:
@@ -33,6 +40,18 @@ class ProcessorHelp:
     type_descr: str
 
 
+def processor_to_processor_help(x: TriggerProcessor) -> ProcessorHelp:
+    if isinstance(x, MultiConvertTriggerProcessor):
+        return ProcessorHelp(
+            triggers=", ".join(x.triggers),
+            type_descr=clean_type_str(get_args(x.res_type)[0]) + "*",
+        )
+    else:
+        return ProcessorHelp(
+            triggers=", ".join(x.triggers), type_descr=clean_type_str(x.res_type)
+        )
+
+
 @mutable()
 class OptHelp:
     processors: List[ProcessorHelp]
@@ -44,12 +63,7 @@ def option_to_help(opt: Option) -> OptHelp:
     default_str = str(opt.default_value) if opt.default_value != ... else ""
 
     return OptHelp(
-        processors=[
-            ProcessorHelp(
-                triggers=", ".join(x.triggers), type_descr=clean_type_str(x.res_type)
-            )
-            for x in opt.processors
-        ],
+        processors=[processor_to_processor_help(x) for x in opt.processors],
         default=default_str,
         descr=opt.descr if opt.descr is not None else "",
     )
@@ -198,26 +212,23 @@ class OptionGroupHelp:
 
     @property
     def empty(self) -> bool:
-        return (
-            len(self.gen_opts) == 0 and len(self.opt_groups) == 0 and self.descr is None
-        )
+        return len(self.gen_opts) == 0 and len(self.opt_groups) == 0
 
 
 def param_group_to_help_opts_only(
     pg: ParameterGroup, config: Config
 ) -> OptionGroupHelp:
-    cli_opts = pg.cli_opts
+    cli_opts_single = [x for x in pg.cli_opts.values() if isinstance(x, Option)]
+    cli_opts_group = [x for x in pg.cli_pgs.values() if isinstance(x, ParameterGroup)]
 
-    cli_opts_single = [x for x in cli_opts.values() if isinstance(x, Option)]
-    cli_opts_group = [x for x in cli_opts.values() if isinstance(x, ParameterGroup)]
-
+    opt_groups_help = [
+        param_group_to_help_opts_only(x, config=config) for x in cli_opts_group
+    ]
     opt_grp_help = OptionGroupHelp(
         name=pg.name,
         descr=pg.short_descr,
         gen_opts=[option_to_help(x) for x in cli_opts_single],
-        opt_groups=[
-            param_group_to_help_opts_only(x, config=config) for x in cli_opts_group
-        ],
+        opt_groups=[x for x in opt_groups_help if not x.empty],
     )
     for cb in config.get_event_cbs("HELP_PG_CREATE"):
         opt_grp_help = cb(pg, opt_grp_help)
@@ -248,7 +259,8 @@ def create_commands_panel(subcommands: Dict[str, Optional[str]]) -> Optional[Pan
 
 @mutable(kw_only=True)
 class CommandHelp:
-    descr: Optional[str]
+    short_descr: Optional[str]
+    long_descr: Optional[str]
     usage: str
     subcommands: Dict[str, Optional[str]]
     args: List[ArgHelp]
@@ -258,10 +270,13 @@ class CommandHelp:
     def __rich__(self) -> Group:
         elements: List[Union[ConsoleRenderable, RichCast, str, Panel]] = []
 
-        if self.descr is not None:
-            elements.append(Text(self.descr + "\n"))
+        if self.short_descr is not None:
+            elements.append(Text(self.short_descr + "\n"))
 
-        elements.append(Text(self.usage + "\n"))
+        elements.append(Text("Usage: " + self.usage + "\n"))
+
+        if self.long_descr is not None:
+            elements.append(Text(inspect.cleandoc(self.long_descr) + "\n"))
 
         cb_table = cb_help_list_to_table(self.callbacks)
         if cb_table is not None:
@@ -282,7 +297,7 @@ class CommandHelp:
 
 def command_to_help(cmd: Command) -> CommandHelp:
     # argument help to show
-    args = [argument_to_help(x) for x in cmd.param_group.cli_args.values()]
+    args = [argument_to_help(x) for x in cmd.param_group.cli_args_recursive.values()]
     cbs = [clicb_to_help(x) for x in cmd.config.cli_callbacks + cmd.local_cli_callbacks]
 
     # the options don't need a special name or description;
@@ -295,7 +310,8 @@ def command_to_help(cmd: Command) -> CommandHelp:
     subcommands = {key: obj.descr for key, obj in cmd.subcommands.items()}
 
     cmd_help = CommandHelp(
-        descr=cmd.param_group.short_descr,
+        short_descr=cmd.param_group.short_descr,
+        long_descr=cmd.param_group.long_descr,
         usage=cmd.usage,
         args=args,
         callbacks=cbs,

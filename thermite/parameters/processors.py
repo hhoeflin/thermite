@@ -4,7 +4,11 @@ from typing import Any, List, Sequence, Type
 from attrs import field, mutable
 
 from thermite.exceptions import TriggerError
-from thermite.type_converters import CLIArgConverterBase, split_args_by_nargs
+from thermite.type_converters import (
+    CLIArgConverterBase,
+    ListCLIArgConverter,
+    split_args_by_nargs,
+)
 
 
 def str_list_conv(x: Sequence[str]) -> List[str]:
@@ -92,3 +96,18 @@ class MultiConvertTriggerProcessor(TriggerProcessor):
             value = value.copy()
             value.append(append_val)
             return value
+
+    def to_convert_trigger_processor(self) -> ConvertTriggerProcessor:
+        inner_converter = self.type_converter
+        if not isinstance(inner_converter.num_req_args, int):
+            raise Exception(
+                "Inner type converter needs ask for constant number " "of arguments"
+            )
+        return ConvertTriggerProcessor(
+            type_converter=ListCLIArgConverter(
+                target_type=List[inner_converter.target_type],  # type: ignore
+                inner_converter=inner_converter,
+            ),
+            triggers=self.triggers,
+            res_type=self.res_type,
+        )

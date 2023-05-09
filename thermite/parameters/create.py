@@ -218,7 +218,7 @@ def process_function_to_param_group(
     obj_sig = process_function_to_obj_signature(func=func)
     # SIG_EXTRACT Event start
     for cb in config.get_event_cbs(Event.SIG_EXTRACT):
-        obj_sig = cb(func, obj_sig)
+        obj_sig = cb(obj_sig, func)
     # SIG_EXTRACT Event end
     pg = process_obj_signature_to_param_group(
         obj=func,
@@ -246,7 +246,7 @@ def process_class_to_param_group(
     obj_sig = process_class_to_obj_signature(klass=klass)
     # SIG_EXTRACT Event start
     for cb in config.get_event_cbs(Event.SIG_EXTRACT):
-        obj_sig = cb(klass, obj_sig)
+        obj_sig = cb(obj_sig, klass)
     # SIG_EXTRACT Event end
     pg = process_obj_signature_to_param_group(
         obj=klass,
@@ -274,7 +274,7 @@ def process_instance_to_param_group(
     obj_sig = process_instance_to_obj_signature(obj=obj)
     # SIG_EXTRACT Event start
     for cb in config.get_event_cbs(Event.SIG_EXTRACT):
-        obj_sig = cb(obj, obj_sig)
+        obj_sig = cb(obj_sig, obj)
     # SIG_EXTRACT Event end
     pg = process_obj_signature_to_param_group(
         obj=lambda: obj,

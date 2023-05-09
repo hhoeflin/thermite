@@ -149,16 +149,15 @@ def process_instance_to_obj_signature(obj: Any) -> ObjSignature:
 
 def match_obj_filter_sig(
     obj_to_match: Any, cb: Callable[[Any, "ObjSignature"], "ObjSignature"]
-) -> Callable[[Any, "ObjSignature"], "ObjSignature"]:
+) -> Callable[["ObjSignature", Any], "ObjSignature"]:
     std_obj_to_match = standardize_obj(obj_to_match)
 
-    def filtered_callback(obj: Any, sig: "ObjSignature") -> "ObjSignature":
+    def filtered_callback(sig: "ObjSignature", obj: Any) -> "ObjSignature":
         if standardize_obj(obj) == std_obj_to_match:
-            return cb(obj, sig)
+            return cb(sig, obj)
         else:
             return sig
 
     return filtered_callback
-
 
 EventCallbacks.default_event_obj_filters[Event.SIG_EXTRACT] = match_obj_filter_sig

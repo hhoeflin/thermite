@@ -79,11 +79,7 @@ class Parameter(ABC, ParameterSignature):
 class Option(Parameter):
     """Base class for Options."""
 
-    _processors: List[TriggerProcessor]
-
-    @property
-    def processors(self) -> List[TriggerProcessor]:
-        return self._processors
+    processors: List[TriggerProcessor]
 
     @property
     def _final_trigger_by_processor(self) -> Dict[str, TriggerProcessor]:
@@ -123,18 +119,9 @@ class Option(Parameter):
         # to convert it to an argument, we need a processor of subclass
         # ConvertTriggerProcessor
         type_converter = None
-        for proc in self._processors:
+        for proc in self.processors:
             if isinstance(proc, MultiConvertTriggerProcessor):
-                inner_converter = proc.type_converter
-                if not isinstance(inner_converter.num_req_args, int):
-                    raise Exception(
-                        "Inner type converter needs ask for constant number "
-                        "of arguments"
-                    )
-                type_converter = ListCLIArgConverter(
-                    target_type=List[inner_converter.target_type],  # type: ignore
-                    inner_converter=proc.type_converter,
-                )
+                type_converter = proc.to_convert_trigger_processor().type_converter
                 res_type = proc.res_type
                 break
             elif isinstance(proc, ConvertTriggerProcessor):

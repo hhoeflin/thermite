@@ -130,7 +130,7 @@ class ParameterGroup(MutableMapping):
             return []
 
         if input_args[0].startswith("-"):
-            opts_by_trigger = self.final_trigger_map
+            opts_by_trigger = self.cli_opts_recursive
             if input_args[0] in opts_by_trigger:
                 self._num_bound += 1
                 opt = opts_by_trigger[input_args[0]]
@@ -141,7 +141,7 @@ class ParameterGroup(MutableMapping):
                 raise TriggerError(f"No option with trigger {input_args[0]}")
 
         else:
-            for argument in self.cli_args.values():
+            for argument in self.cli_args_recursive.values():
                 if argument.unset:
                     self._num_bound += 1
                     args_use, args_remain = split_args_by_nargs(
@@ -218,37 +218,46 @@ class ParameterGroup(MutableMapping):
         return {k: v for k, v in self.items() if isinstance(v, Argument)}
 
     @property
-    def cli_opts(self) -> Dict[str, Union[Option, "ParameterGroup"]]:
-        return {
-            k: v for k, v in self.items() if isinstance(v, (Option, ParameterGroup))
-        }
+    def cli_opts(self) -> Dict[str, Option]:
+        return {k: v for k, v in self.items() if isinstance(v, Option)}
 
     @property
-    def final_trigger_map(self) -> Dict[str, Union[Option, "ParameterGroup"]]:
-        all_trigger_mappings: Dict[str, Union[Option, "ParameterGroup"]] = {}
-        for opt in self.cli_opts.values():
-            if isinstance(opt, Option):
-                for trigger in opt.final_triggers:
-                    if trigger in all_trigger_mappings:
-                        raise DuplicatedTriggerError(
-                            f"Trigger {trigger} option {opt} "
-                            f"and {all_trigger_mappings[trigger]}"
-                        )
-                    else:
-                        all_trigger_mappings[trigger] = opt
-            elif isinstance(opt, ParameterGroup):
-                for trigger, trigger_opt in opt.final_trigger_map.items():
-                    if trigger in all_trigger_mappings:
-                        raise DuplicatedTriggerError(
-                            f"Trigger {trigger} is in options {trigger_opt} "
-                            f"and {all_trigger_mappings[trigger]}"
-                        )
-                    else:
-                        all_trigger_mappings[trigger] = opt
-            else:
-                assert_never(opt)
+    def cli_pgs(self) -> Dict[str, "ParameterGroup"]:
+        return {k: v for k, v in self.items() if isinstance(v, ParameterGroup)}
 
+    @property
+    def cli_opts_recursive(self) -> Dict[str, Option]:
+        all_trigger_mappings: Dict[str, Option] = {}
+        for opt in self.cli_opts.values():
+            for trigger in opt.final_triggers:
+                if trigger in all_trigger_mappings:
+                    raise DuplicatedTriggerError(
+                        f"Trigger {trigger} option {opt} "
+                        f"and {all_trigger_mappings[trigger]}"
+                    )
+                else:
+                    all_trigger_mappings[trigger] = opt
+        for pg in self.cli_pgs.values():
+            for trigger, opt in pg.cli_opts_recursive.items():
+                if trigger in all_trigger_mappings:
+                    raise DuplicatedTriggerError(
+                        f"Trigger {trigger} option {opt} "
+                        f"and {all_trigger_mappings[trigger]}"
+                    )
+                else:
+                    all_trigger_mappings[trigger] = opt
         return all_trigger_mappings
+
+    @property
+    def cli_args_recursive(self) -> Dict[str, Argument]:
+        all_args_dict: Dict[str, Argument] = {}
+        for name, arg in self.cli_args.items():
+            all_args_dict[name] = arg
+        for pg_name, pg in self.cli_pgs.items():
+            for name, arg in pg.cli_args_recursive.items():
+                all_args_dict[f"{pg_name}-{name}"] = arg
+
+        return all_args_dict
 
 
 def match_obj_filter_pg(
@@ -263,6 +272,5 @@ def match_obj_filter_pg(
             return pg
 
     return filtered_callback
-
 
 EventCallbacks.default_event_obj_filters[Event.PG_POST_CREATE] = match_obj_filter_pg

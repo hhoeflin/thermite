@@ -8,7 +8,6 @@ from inspect import Signature, classify_class_attrs
 from typing import (
     Any,
     Callable,
-    Concatenate,
     Dict,
     List,
     Optional,
@@ -186,34 +185,32 @@ class Command(MutableMapping):
         return res
 
     def process(self, args: Sequence[str]) -> List[str]:
-        input_args_deque = split_and_expand(args)
+        cli_args_splitter = self.config.SplitterClass(args, self)
 
         cb_map = dict(
             **cb_list_to_trigger_map(self.config.cli_callbacks),
             **cb_list_to_trigger_map(self.local_cli_callbacks),
         )
 
-        while len(input_args_deque) > 0:
-            input_args = input_args_deque.popleft()
-
+        while (next_args := cli_args_splitter.next()) is not None:
             # first we check if we need to trigger one of the callbacks
             # only if that is not the case do we hand it to the
             # regular parameters; the callbacks are eager and need
             # to be processed first
-            if len(input_args) > 0 and input_args[0] in cb_map:
-                cb = cb_map[input_args[0]]
-                args_return = cb.execute(self, input_args)
-                self._add_history(input_args=input_args, args_return=args_return)
+            if len(next_args) > 0 and next_args[0] in cb_map:
+                cb = cb_map[next_args[0]]
+                args_return = cb.execute(self, next_args)
+                self._add_history(input_args=next_args, args_return=args_return)
                 if args_return is not None:
-                    input_args_deque.appendleft(list(args_return))
+                    cli_args_splitter.add_remain(args_return)
             else:
-                args_return = self.param_group.process(input_args)
-                self._add_history(input_args=input_args, args_return=args_return)
+                args_return = self.param_group.process(next_args)
+                self._add_history(input_args=next_args, args_return=args_return)
                 if len(args_return) > 0:
-                    input_args_deque.appendleft(list(args_return))
-                    if len(args_return) == len(input_args):
+                    cli_args_splitter.add_remain(args_return)
+                    if len(args_return) == len(next_args):
                         # we are finished
-                        return undeque(input_args_deque)
+                        return cli_args_splitter.final()
         return []
 
     def get_subcommand(self, name: str) -> "Command":
