@@ -36,6 +36,10 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
             # CMD_POST_CREATE Event end
             cmd = subcmd
         else:
+            # CMD_FINISH Event start
+            for cb in cmd.config.get_event_cbs(Event.CMD_FINISH):
+                cmd = cb(cmd)
+            # CMD_FINISH Event end
             try:
                 return cmd.param_group.value
             except ParameterError as e:

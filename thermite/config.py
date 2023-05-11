@@ -19,6 +19,7 @@ class Event(Enum):
     CMD_POST_CREATE = "CMD_POST_CREATE"
     CMD_POST_PROCESS = "CMD_POST_PROCESS"
     PG_POST_CREATE = "PG_POST_CREATE"
+    CMD_FINISH = "CMD_FINISH"
 
     def __str__(self) -> str:
         return self.value

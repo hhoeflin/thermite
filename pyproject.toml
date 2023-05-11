@@ -33,6 +33,7 @@ dev = [
     "black",
     "Flake8-pyproject",
     "pydocstyle",
+    "mkdocs-material",
 ]
 
 [tool.pyright]

@@ -1,0 +1,12 @@
+version1:
+  opts:
+    - ["--global-param1", "a_path"]
+  cmds: 
+    example1:
+      opts:
+        - ["--param1", "foo"]
+version2:
+  cmds: 
+    example1:
+      opts:
+        - ["--param1", "bar"]

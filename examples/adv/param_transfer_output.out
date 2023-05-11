@@ -1,0 +1,3 @@
+> python examples/adv/param_transfer.py --input-dir foo --param1 bar --param2 0.5
+input_dir: foo
+kwargs: {'param1': 'bar', 'param2': 0.5}

@@ -1,0 +1,3 @@
+> python examples/lists/empty_list.py --x-empty --y 4 --y 5
+x: []
+y: [4, 5]
