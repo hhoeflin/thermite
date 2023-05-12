@@ -1,8 +1,23 @@
-site_name: My Docs
+site_name: "Documentation for Thermite - a CLI Generator"
 theme:
   name: material
   features:
     - navigation.expand
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            members_order: "source"
+            show_if_no_docstring: True
+            separate_signature: true
+            merge_init_into_class: true
+            filters:
+            - "!^_"
+            - "!^__"
+            show_root_toc_entry: False
+
 markdown_extensions:
   - admonition
   - pymdownx.details
@@ -19,9 +34,14 @@ markdown_extensions:
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
+  - toc:
+      toc_depth: 2
 nav:
   - Home: index.md
   - Examples:
     - Basics: examples/basic.md
     - Lists: examples/lists.md
     - Dataclasses: examples/dataclasses.md
+  - References: ./references.md
+extra_css:
+  - css/mkdocstrings.css
