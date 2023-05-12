@@ -36,8 +36,12 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - toc:
       toc_depth: 2
+
 nav:
   - Home: index.md
+  - Customization:
+    - CLI callbacks: ./cli_callbacks.md
+    - Classes/Events: ./classes_events.md
   - Examples:
     - Basics: examples/basic.md
     - Lists: examples/lists.md

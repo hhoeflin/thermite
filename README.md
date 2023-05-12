@@ -1,38 +1,57 @@
-# Why another CLI generator?
+*Note: this package is under heavy development and breaking changes are to be expected.*
 
-There are already lots of CLI generators for python, many with lots of usage and great functionality. Just to name the most important are
-- argparse
-- click
-- typer
-- fire
+# Welcome to Thermite, a CLI generator
 
-So why another one? While argparse and click are both very feature rich, it is the functionality of fire and typer that are interesting,
-with fire allowing to run pretty much any python object and typer making extensive use of type annotations. 
-
-This project aims to take the best of fire and typer and create a package that lets you
+What are the main things that this package provides.
 
 - run any python function or class that has type annotations
 - Use docstrings as the source of help
 - not require changing the signature of existing functions to customize
-- avoid a plethora of decorators on every function that is being used
-- allow for grouped options in functions by using dataclasses as parameters
+- allow for classes as parameter annotations in functions that will be translated
+  into grouped options
+- Allow for custom classes to be used as type annotations.
+- provides the possibility to change the defaults in the CLI by using 
+  YAML or JSON definitions (an easy way to use configuration files with CLIs)
+- provides a plugin-interface to extend functionality (e.g. the help itself
+  is just a plugin)
 
-Overall it should make it easier to create CLIs, especially for complex cases with lots of options.
 
-# What does a CLI look like in practice
+## Installation
 
-## A single function
+The package is available on pip, so can be installed with 
 
-When a single function is passed, the parameters of that function are
-made available to the tool using options. If the return parameter is None, the
-run will end after executing the function. If the annotated return value is a 
-class, the CLI will make the *instancemethods* and *classmethods* available
-as subcommands.
+```bash
+pip install thermite
+```
 
-## A class definition
+## Getting started
 
-When using a class definition, the __init__ function is taken as the starting
-point with the classmethods and instancemethods of the return used as the 
-subcommands.
 
-## An instance of a class
+For any function, class or instance, just use 
+
+```python
+from thermite import run
+
+if __name__ == "__main__":
+    run(obj)
+```
+and the package does the rest.
+
+
+## Customization, other examples and docs
+
+For more documentation on how to customize the CLI, other options
+and examples visit the [documentation](https://hhoeflin.github.io/thermite/).
+
+
+# Other CLI generators
+
+There are already lots of CLI generators for python, many with lots of 
+usage and great functionality that have inspired this package. Check them out.
+
+- argparse
+- click
+- typer
+- fire
+- docopt
+
