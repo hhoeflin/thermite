@@ -8,12 +8,7 @@ The basic version is that lists with options are used by
 specifying the option multiple times. For this behaviour
 nothing special needs to be done.
 
-??? Example "Basic version for options with List type"
-
-    === "Code" 
-        ```python 
-        --8<-- 'examples/lists/default.py'
-        ```
+!!! Example "Basic version for options with List type"
 
     === "Help" 
         ```txt 
@@ -24,6 +19,12 @@ nothing special needs to be done.
         ```txt 
         --8<-- 'examples/lists/default_output.out'
         ```
+    
+    === "Code" 
+        ```python 
+        --8<-- 'examples/lists/default.py'
+        ```
+
 
 ## Passing multiple arguments for a single call to option
 
@@ -31,12 +32,8 @@ We can also set it up so that we can pass multiple values to the
 list for a single call to the option.
 
 
-??? Example "Single option with variable length arguments"
+!!! Example "Single option with variable length arguments"
 
-    === "Code" 
-        ```python 
-        --8<-- 'examples/lists/var_length_list_opt.py'
-        ```
 
     === "Help" 
         ```txt 
@@ -48,18 +45,17 @@ list for a single call to the option.
         --8<-- 'examples/lists/var_length_list_opt_output.out'
         ```
 
+    === "Code" 
+        ```python 
+        --8<-- 'examples/lists/var_length_list_opt.py'
+        ```
 
 ## Multiple lists as arguments with no-op separator
 
 in this library even multiple variable length arguments are possible,
 we just have to seperate them with a no-op option. 
 
-??? example "multiple lists with variable arguments"
-
-    === "code" 
-        ```python 
-        --8<-- 'examples/lists/multiple_args.py'
-        ```
+!!! example "multiple lists with variable arguments"
 
     === "help" 
         ```txt 
@@ -70,13 +66,19 @@ we just have to seperate them with a no-op option.
         ```txt 
         --8<-- 'examples/lists/multiple_args_output.out'
         ```
+    
+    === "code" 
+        ```python 
+        --8<-- 'examples/lists/multiple_args.py'
+        ```
+
 
 
 ## Setting an empty list (if it is not the default)
 
 We can also set a trigger that sets a parameter to an empty list.
 
-??? example "Trigger for empty list"
+!!! example "Trigger for empty list"
 
     === "code" 
         ```python 

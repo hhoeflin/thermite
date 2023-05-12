@@ -46,6 +46,7 @@ nav:
     - Basics: examples/basic.md
     - Lists: examples/lists.md
     - Dataclasses: examples/dataclasses.md
+    - Advanced: examples/advanced.md
   - References: ./references.md
 extra_css:
   - css/mkdocstrings.css
