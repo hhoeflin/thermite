@@ -10,7 +10,7 @@
       
       
       
-        <link rel="next" href="examples/basic/">
+        <link rel="next" href="cli_callbacks/">
       
       <link rel="icon" href="assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.4.3, mkdocs-material-9.1.9">
@@ -245,6 +245,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#bash-completion" class="md-nav__link">
+    Bash completion
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -273,12 +280,77 @@
       
       
         <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
-          Examples
+          Customization
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
         <label class="md-nav__title" for="__nav_2">
+          <span class="md-nav__icon md-icon"></span>
+          Customization
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cli_callbacks/" class="md-nav__link">
+        CLI callbacks
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="classes_events/" class="md-nav__link">
+        Classes/Events
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+      
+      
+        
+      
+      <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          Examples
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <label class="md-nav__title" for="__nav_3">
           <span class="md-nav__icon md-icon"></span>
           Examples
         </label>
@@ -401,6 +473,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#bash-completion" class="md-nav__link">
+    Bash completion
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -444,228 +523,12 @@
 and the package does the rest.</p>
 <h2 id="customization-options">Customization options</h2>
 <p>The package allows plenty of different customization options, enabled 
-through the plugin system.</p>
-<h3 id="the-class-system">The class system</h3>
-<p><pre class="mermaid"><code>classDiagram
-    Command &lt;-- ParameterGroup
-    ParameterGroup &lt;-- Parameter
-
-    Parameter &lt;|-- Option
-    Parameter &lt;|-- Argument
-
-    Argument: +Type res_type
-    Argument: +CLIArgConverterBase type_converter
-    Argument &lt;-- CLIArgConverterBase
-
-    Option: +List[TriggerProcessor]
-
-    Option &lt;-- TriggerProcessor
-
-    TriggerProcessor &lt;|-- ConstantTriggerProcessor
-    TriggerProcessor &lt;|-- ConvertTriggerProcessor
-    TriggerProcessor &lt;|-- MultiConvertTriggerProcessor
-
-    ConvertTriggerProcessor: +CLIArgConverterBase type_converter
-    ConvertTriggerProcessor &lt;-- CLIArgConverterBase
-    MultiConvertTriggerProcessor: +CLIArgConverterBase type_converter
-    MultiConvertTriggerProcessor &lt;-- CLIArgConverterBase
-
-
-    ObjSignature &lt;-- ParameterSignature
-    ObjSignature: +Dict[str, ParameterSignature] params
-    class ParameterSignature</code></pre>
-In this diagram the relationships between the most important classes are
-listed. Depending on where the customization is needed, it is possible 
-to manipulate the automatic creation of the CLI at various places, which
-is enabled through the event callback system.</p>
-<h3 id="the-callback-systems-for-events">The callback systems for events</h3>
-<p>During creation of the CLI, at several places in the code callbacks
-are being executed that are associated with certain events.</p>
-<p>The currently supported events are:</p>
-<ul>
-<li><em>START_ARGS_PRE_PROCESS</em>: This event is being called after the first command
-  object is created, but before any input arguments have yet been processed. This
-  event can be used to, e.g., globally react to certain options
-  that can occur anywhere among the input arguments</li>
-<li><em>SIG_EXTRACT</em>: This is being called after the object signature is extracted for
-  an object (e.g. class or function) but before this object is parsed into a 
-  <em>ParameterGroup</em> or <em>Command</em>. This can be useful when the default annotation 
-  of a function causes errors. Also, all information extracted from an obj
-  flows through this event, so any adjustments to documentation can be done here.</li>
-<li><em>PG_POST_CREATE</em>: Called after a <em>ParameterGroup</em> was created from the object
-  signature. This is done for commands as well as nested classes that are parameters
-  themselves.</li>
-<li><em>CMD_POST_CREATE</em>: Called after a <em>Command</em> was created, but before
-  any input arguments are processed. </li>
-<li><em>CMD_POST_PROCESS</em>: Called for <em>Command</em> after the input arguments are 
-  processed but before the subcommands are being called.</li>
-</ul>
-<p>Using these events, a lot of customization is possible. In addition, 
-custom callbacks at the CLI level can be registered.</p>
-<p>For convenience it is also easy to specify that these events are only used
-for certain objects. Examples on how to use this feature can be found below.</p>
-<h3 id="callbacks-at-the-cli-level">Callbacks at the CLI level</h3>
-<p>Callbacks at the CLI level are used to customize behavior based on user
-input that is not directly related to the object for which the CLI is being created.
-Typical use cases for this are:</p>
-<ul>
-<li>Showing the help for the current command</li>
-<li>Customizing default values based on JSON or YAML input files</li>
-<li>Creating shell-completion</li>
-<li>A 'no-op' callback, that does nothing but is useful to work as an input 
-  delimiter for variable lengh options or arguments</li>
-</ul>
-<p>In fact, all of these provided in this library (including the help itself) is
-written only using public interfaces. So if you don't like the look of the current
-help - you can just write your own :).</p>
-<p>These callbacks can be specified to either work for the top-level command and
-all subcommands or only for the top-level command. Using the event-system above
-it is of course also possible to specify callbacks that only work for specific 
-subcommands.</p>
+through the plugin system. More information is available on other pages of
+this documentation.</p>
 <h2 id="examples-of-common-customizations">Examples of common customizations</h2>
 <p>For various examples on how to customize the CLI, please see the Table of Contents
 on the side.</p>
-<h3 id="transferring-parameters-between-functions">Transferring parameters between functions</h3>
-<p>Show a generic wrapper class, for using a function that works for
-a single 'file' to adapt it to work on directories of files,
-using automatically the information on options from the original file</p>
-<details class="example">
-<summary>Transferring paramters from one function to another</summary>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Help</label><label for="__tabbed_1_3">Output</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="sd">Example of parameter transfer</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="kn">from</span> <span class="nn">thermite</span> <span class="kn">import</span> <span class="n">Config</span><span class="p">,</span> <span class="n">Event</span><span class="p">,</span> <span class="n">ObjSignature</span><span class="p">,</span> <span class="n">process_function_to_obj_signature</span><span class="p">,</span> <span class="n">run</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">def</span> <span class="nf">process_file</span><span class="p">(</span><span class="n">input_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">param1</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">param2</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="o">...</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="k">def</span> <span class="nf">process_dir</span><span class="p">(</span><span class="n">input_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;input_dir: </span><span class="si">{</span><span class="n">input_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;kwargs: </span><span class="si">{</span><span class="n">kwargs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="c1"># for input_file in input_dir.glob(&quot;*&quot;):</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="c1">#    process_file(input_file, **kwargs)</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="k">def</span> <span class="nf">transfer_params</span><span class="p">(</span><span class="n">sig</span><span class="p">:</span> <span class="n">ObjSignature</span><span class="p">,</span> <span class="n">_</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    <span class="n">proc_file_sig</span> <span class="o">=</span> <span class="n">process_function_to_obj_signature</span><span class="p">(</span><span class="n">process_file</span><span class="p">)</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>    <span class="k">del</span> <span class="n">sig</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;kwargs&quot;</span><span class="p">]</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>    <span class="k">del</span> <span class="n">proc_file_sig</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;input_file&quot;</span><span class="p">]</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>    <span class="n">sig</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">proc_file_sig</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>    <span class="k">return</span> <span class="n">sig</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">()</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>    <span class="n">config</span><span class="o">.</span><span class="n">event_cb_deco</span><span class="p">(</span><span class="n">Event</span><span class="o">.</span><span class="n">SIG_EXTRACT</span><span class="p">,</span> <span class="n">process_dir</span><span class="p">)(</span><span class="n">transfer_params</span><span class="p">)</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>    <span class="n">run</span><span class="p">(</span><span class="n">process_dir</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>&gt; python examples/adv/param_transfer.py --help
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>Usage: examples/adv/param_transfer.py [OPTIONS]
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>╭─ Eager Callbacks ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>│   --help     Display the help message                                                                                                                                                             │
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>│   --input-dir     Path                                                                                                                                                                            │
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>│   --param1        str                                                                                                                                                                             │
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>│   --param2        float                                                                                                                                                                           │
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>&gt; python examples/adv/param_transfer.py --input-dir foo --param1 bar --param2 0.5
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>input_dir: foo
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>kwargs: {&#39;param1&#39;: &#39;bar&#39;, &#39;param2&#39;: 0.5}
-</span></code></pre></div>
-</div>
-</div>
-</div>
-</details>
-<h3 id="using-json-configuration-files">Using JSON configuration files</h3>
-<p>We can also use a YAML or JSON file to dynamically set the defaults 
-of the CLI. This can be useful for complex data science projects in order 
-not to have to hardcode defaults. </p>
-<details class="example">
-<summary>Setting defaults using a config file</summary>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Code</label><label for="__tabbed_2_2">Help</label><label for="__tabbed_2_3">Config file</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="sd">CLI with subcommands.</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="kn">from</span> <span class="nn">thermite</span> <span class="kn">import</span> <span class="n">run</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="kn">from</span> <span class="nn">thermite.config</span> <span class="kn">import</span> <span class="n">Config</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="kn">from</span> <span class="nn">thermite.plugins.default_defs</span> <span class="kn">import</span> <span class="n">defaults_cli_callback</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="k">class</span> <span class="nc">Subcommands</span><span class="p">:</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">global_param1</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>        <span class="k">pass</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="k">def</span> <span class="nf">cmd1</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param1</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;First subcommand&quot;&quot;&quot;</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>        <span class="k">pass</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">cli_callbacks</span><span class="o">=</span><span class="p">[</span><span class="n">defaults_cli_callback</span><span class="p">])</span>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">run</span><span class="p">(</span><span class="n">Subcommands</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>&gt; python examples/adv/config_file.py --defaults-file examples/adv/config_file.yml#version1 --help
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Initialize self.  See help(type(self)) for accurate signature.
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>Usage: examples/adv/config_file.py [OPTIONS] SUBCOMMAND
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>╭─ Eager Callbacks ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>│   --defaults-file     Read defaults from file                                                                                                                                                     │
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>│   --help              Display the help message                                                                                                                                                    │
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>│   --global-param1     Path     a_path                                                                                                                                                             │
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>╭─ Commands ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>│ cmd1  First subcommand                                                                                                                                                                            │
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>version1:
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  opts:
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    - [&quot;--global-param1&quot;, &quot;a_path&quot;]
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  cmds: 
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    example1:
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>      opts:
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        - [&quot;--param1&quot;, &quot;foo&quot;]
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>version2:
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>  cmds: 
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    example1:
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>      opts:
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>        - [&quot;--param1&quot;, &quot;bar&quot;]
-</span></code></pre></div>
-</div>
-</div>
-</div>
-</details>
-<p>While not available yet, in a very similar way plugins can be created that use 
-environment variables this way as well.</p>
-<h3 id="bash-completion">Bash completion</h3>
+<h2 id="bash-completion">Bash completion</h2>
 <p>Not yet implemented. Plan is to have a JSON specification of the core
 of the commands. This will then be run by bash using only minimal dependencies
 so that loading the completion is fast, even if the CLI underneath can be slow
