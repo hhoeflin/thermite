@@ -8,9 +8,9 @@ from thermite import run
 
 
 @mutable(kw_only=True)
-class Config:
+class PytorchSimCLR:
     """
-    Config for PyTorch SimCLR
+    PyTorch SimCLR training
 
     Args:
         data: Path to dataset
@@ -48,6 +48,10 @@ class Config:
     n_views: int = 2
     gpu_index: int = 0
 
+    def train(self):
+        """Training the model."""
+        ...
+
 
 if __name__ == "__main__":
-    run(Config)
+    run(PytorchSimCLR)
