@@ -5,6 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "thermite"
 authors = [{name = "Holger Hoefling", email = "hhoeflin@gmail.com"}]
+readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]

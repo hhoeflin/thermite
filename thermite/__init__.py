@@ -1,5 +1,5 @@
 """A package for easily creating CLIs."""
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .command import CliCallback
 from .config import Config, Event
