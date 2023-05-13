@@ -77,8 +77,10 @@ def extract_subcommands(
     if inspect.isclass(return_type):
         class_attrs = classify_class_attrs(return_type)
         res = {}
-        for attr_name, _, _, obj in class_attrs:
+        for attr_name, kind, _, obj in class_attrs:
             if omit_dunder and attr_name.startswith("__"):
+                continue
+            if kind in ["property", "data"]:
                 continue
             descr = extract_descriptions(obj)
             res[clify_argname(attr_name)] = Subcommand(
