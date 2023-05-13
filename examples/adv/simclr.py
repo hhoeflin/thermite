@@ -1,13 +1,11 @@
-# from dataclasses import dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
-
-from attrs import mutable
 
 from thermite import run
 
 
-@mutable(kw_only=True)
+@dataclass(kw_only=True)
 class PytorchSimCLR:
     """
     PyTorch SimCLR training
