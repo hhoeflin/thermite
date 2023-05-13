@@ -1,92 +1,53 @@
-from dataclasses import dataclass
+# from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
 
-model_names = sorted(
-    name
-    for name in models.__dict__
-    if name.islower() and not name.startswith("__") and callable(models.__dict__[name])
-)
+from attrs import mutable
 
-parser = argparse.ArgumentParser(description="PyTorch SimCLR")
-parser.add_argument(
-    "-data", metavar="DIR", default="./datasets", help="path to dataset"
-)
-parser.add_argument(
-    "-dataset-name", default="stl10", help="dataset name", choices=["stl10", "cifar10"]
-)
-parser.add_argument(
-    "-a",
-    "--arch",
-    metavar="ARCH",
-    default="resnet18",
-    choices=model_names,
-    help="model architecture: " + " | ".join(model_names) + " (default: resnet50)",
-)
-parser.add_argument(
-    "-j",
-    "--workers",
-    default=12,
-    type=int,
-    metavar="N",
-    help="number of data loading workers (default: 32)",
-)
-parser.add_argument(
-    "--epochs", default=200, type=int, metavar="N", help="number of total epochs to run"
-)
-parser.add_argument(
-    "-b",
-    "--batch-size",
-    default=256,
-    type=int,
-    metavar="N",
-    help="mini-batch size (default: 256), this is the total "
-    "batch size of all GPUs on the current node when "
-    "using Data Parallel or Distributed Data Parallel",
-)
-parser.add_argument(
-    "--lr",
-    "--learning-rate",
-    default=0.0003,
-    type=float,
-    metavar="LR",
-    help="initial learning rate",
-    dest="lr",
-)
-parser.add_argument(
-    "--wd",
-    "--weight-decay",
-    default=1e-4,
-    type=float,
-    metavar="W",
-    help="weight decay (default: 1e-4)",
-    dest="weight_decay",
-)
-parser.add_argument(
-    "--seed", default=None, type=int, help="seed for initializing training. "
-)
-parser.add_argument("--disable-cuda", action="store_true", help="Disable CUDA")
-parser.add_argument(
-    "--fp16-precision",
-    action="store_true",
-    help="Whether or not to use 16-bit precision GPU training.",
-)
+from thermite import run
 
-parser.add_argument(
-    "--out_dim", default=128, type=int, help="feature dimension (default: 128)"
-)
-parser.add_argument(
-    "--log-every-n-steps", default=100, type=int, help="Log every n steps"
-)
-parser.add_argument(
-    "--temperature",
-    default=0.07,
-    type=float,
-    help="softmax temperature (default: 0.07)",
-)
-parser.add_argument(
-    "--n-views",
-    default=2,
-    type=int,
-    metavar="N",
-    help="Number of views for contrastive learning training.",
-)
-parser.add_argument("--gpu-index", default=0, type=int, help="Gpu index.")
+
+@mutable(kw_only=True)
+class Config:
+    """
+    Config for PyTorch SimCLR
+
+    Args:
+        data: Path to dataset
+        dataset_name: Name of the dataset to use
+        arch: Model architectures
+        workers: Number of data loading workers
+        epochs: Number of epochs to run
+        batch_size: Mini-batch-size. Total of all GPUs on a node
+        learning_rate: Initial learning rate
+        weight_decay: Optimizer weight decay
+        seed: Seed for initializing training
+        fp16_precision: Whether or not to use 16bit GPU precision
+        disable_cuda: Disable CUDA
+        out_dim: Feature Dimension of SimCLR projection
+        log_every_n_steps: Number of steps between logging
+        temperature: Softmax temperature
+        n_views: Number of views for contrastive learning
+        gpu_index: Gpu index
+    """
+
+    data: Path = Path("./datasets")
+    dataset_name: Literal["stl10", "cifar10"] = "stl10"
+    arch: Literal["resnet18", "resnet50"] = "resnet50"
+    workers: int = 12
+    epochs: int = 200
+    batch_size: int = 256
+    learning_rate: float = 0.0003
+    weight_decay: float = 1e-4
+    seed: int
+    fp16_precision: bool = False
+    disable_cuda: bool = False
+    out_dim: int = 128
+    log_every_n_steps: int = 100
+    temperature: float = 0.07
+    n_views: int = 2
+    gpu_index: int = 0
+
+
+if __name__ == "__main__":
+    run(Config)
