@@ -35,6 +35,26 @@ if __name__ == "__main__":
 ```
 and the package does the rest.
 
+## Motivating example
+
+As a motivating example I wanted to use a typical piece of code as you find it often 
+in machine learning today. This repo of the [SimCLR](https://github.com/sthalles/SimCLR)
+and specifically the implementation of the CLI in 
+[run.py](https://github.com/sthalles/SimCLR/blob/master/run.py).
+It is a well written repo and like many others of its type, provides a
+command line interface using argparse. This is very normal and it works well,
+but comes with certain drawbacks:
+
+- The variables are inside a namespace, without typing. In general it is somewhat
+  opaque where the variables are being used.
+- The documentation of the variables in the argparse definition, not in docstrings. 
+  So to maintain proper documentation, would need to write it twice.
+- They are all ungrouped in one big list, which may be hard to distinguish what 
+  is intended for what part of the algorithm.
+
+With thermite, it is easy to arrange this differently.
+
+
 ## Customization options
 
 The package allows plenty of different customization options, enabled 
