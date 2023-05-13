@@ -18,7 +18,6 @@ dependencies = [
     "beartype",
     "docstring-parser",
     "immutabledict",
-    "rich",
     "exceptiongroup",
     "prettyprinter",
     "loguru",
