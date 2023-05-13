@@ -25,6 +25,10 @@ dependencies = [
 ]
 
 
+[project.urls]
+Documentation = "https://hhoeflin.github.io/thermite/"
+Source = "https://github.com/hhoeflin/thermite"
+
 [project.optional-dependencies]
 dev = [
     "pudb >=2021.2.2",
