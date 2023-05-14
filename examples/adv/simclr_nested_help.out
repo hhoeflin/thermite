@@ -1,0 +1,49 @@
+> python examples/adv/simclr_nested.py --help
+PyTorch SimCLR training
+
+Usage: examples/adv/simclr_nested.py SUBCOMMAND
+
+╭─ Eager Callbacks ────────────────────────────────────────────────────────────────────────────────╮
+│   --help     Display the help message                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ ╭─ data ───────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Data description                                                                             │ │
+│ │   --data-path     Path                            datasets                                   │ │
+│ │   --data-name     Literal['stl10', 'cifar10']     stl10                                      │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│                                                                                                  │
+│ ╭─ train_vars ─────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Config for training                                                                          │ │
+│ │   --workers, -j             int       12         Number of data loading workers              │ │
+│ │   --epochs                  int       200        Number of epochs to run                     │ │
+│ │   --batch-size, -b          int       256        Mini-batch-size. Total of all GPUs on a     │ │
+│ │                                                  node                                        │ │
+│ │   --learning-rate, --lr     float     0.0003     Initial learning rate                       │ │
+│ │   --weight-decay, --wd      float     0.0001     Optimizer weight decay                      │ │
+│ │   --seed                    int                  Seed for initializing training              │ │
+│ │   --log-every-n-steps       int       100        Number of steps between logging             │ │
+│ │   --temperature             float     0.07       Softmax temperature                         │ │
+│ │   --n-views                 int       2          Number of views for contrastive learning    │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│                                                                                                  │
+│ ╭─ gpu ────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ GPU settings                                                                                 │ │
+│ │   --gpu-fp16-precision        bool     False     Whether or not to use 16bit GPU precision   │ │
+│ │   --no-gpu-fp16-precision     bool                                                           │ │
+│ │   --gpu-disable-cuda          bool     False     Disable CUDA                                │ │
+│ │   --no-gpu-disable-cuda       bool                                                           │ │
+│ │   --gpu-index                 int      0                                                     │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│                                                                                                  │
+│ ╭─ model ──────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Model description                                                                            │ │
+│ │   --model-arch, -a     Literal['resnet18',           resnet50     Model architectures        │ │
+│ │                        'resnet50']                                                           │ │
+│ │   --model-out-dim      int                           128          Feature Dimension of       │ │
+│ │                                                                   SimCLR projection          │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ train  Training the model.                                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

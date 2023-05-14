@@ -22,7 +22,8 @@ create-lock-env:
 ########################
 # Run the examples
 ########################
-run-examples: run-examples-basics run-examples-dataclass run-examples-lists run-examples-advanced
+run-examples: run-examples-basics run-examples-dataclass run-examples-lists \
+	run-examples-advanced
 
 run-examples-basics:
 	myrun(){ echo "> $$@"; eval $$@; };
@@ -51,3 +52,6 @@ run-examples-advanced:
 	myrun python examples/adv/param_transfer.py --help > examples/adv/param_transfer_help.out
 	myrun python examples/adv/param_transfer.py --input-dir foo --param1 bar --param2 0.5 > examples/adv/param_transfer_output.out
 	myrun python examples/adv/config_file.py --defaults-file examples/adv/config_file.yml#version1 --help > examples/adv/config_file_help.out
+	myrun python examples/adv/simclr_argparse.py --help > examples/adv/simclr_argparse_help.out
+	myrun python examples/adv/simclr.py --help > examples/adv/simclr_help.out
+	myrun python examples/adv/simclr_nested.py --help > examples/adv/simclr_nested_help.out

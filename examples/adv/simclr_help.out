@@ -1,0 +1,40 @@
+> python examples/adv/simclr.py --help
+PyTorch SimCLR training
+
+Usage: examples/adv/simclr.py [OPTIONS] SUBCOMMAND
+
+╭─ Eager Callbacks ────────────────────────────────────────────────────────────────────────────────╮
+│   --help     Display the help message                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│   --data                  Path                          datasets     Path to dataset             │
+│   --dataset-name          Literal['stl10',              stl10        Name of the dataset to      │
+│                           'cifar10']                                 use                         │
+│   --arch                  Literal['resnet18',           resnet50     Model architectures         │
+│                           'resnet50']                                                            │
+│   --workers               int                           12           Number of data loading      │
+│                                                                      workers                     │
+│   --epochs                int                           200          Number of epochs to run     │
+│   --batch-size            int                           256          Mini-batch-size. Total of   │
+│                                                                      all GPUs on a node          │
+│   --learning-rate         float                         0.0003       Initial learning rate       │
+│   --weight-decay          float                         0.0001       Optimizer weight decay      │
+│   --seed                  int                                        Seed for initializing       │
+│                                                                      training                    │
+│   --fp16-precision        bool                          False        Whether or not to use       │
+│                                                                      16bit GPU precision         │
+│   --no-fp16-precision     bool                                                                   │
+│   --disable-cuda          bool                          False        Disable CUDA                │
+│   --no-disable-cuda       bool                                                                   │
+│   --out-dim               int                           128          Feature Dimension of        │
+│                                                                      SimCLR projection           │
+│   --log-every-n-steps     int                           100          Number of steps between     │
+│                                                                      logging                     │
+│   --temperature           float                         0.07         Softmax temperature         │
+│   --n-views               int                           2            Number of views for         │
+│                                                                      contrastive learning        │
+│   --gpu-index             int                           0            Gpu index                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ train  Training the model.                                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

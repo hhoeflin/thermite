@@ -1,0 +1,38 @@
+> python examples/adv/simclr_argparse.py --help
+usage: simclr_argparse.py [-h] [-data DIR] [-dataset-name {stl10,cifar10}]
+                          [-a ARCH] [-j N] [--epochs N] [-b N] [--lr LR]
+                          [--wd W] [--seed SEED] [--disable-cuda]
+                          [--fp16-precision] [--out_dim OUT_DIM]
+                          [--log-every-n-steps LOG_EVERY_N_STEPS]
+                          [--temperature TEMPERATURE] [--n-views N]
+                          [--gpu-index GPU_INDEX]
+
+PyTorch SimCLR
+
+options:
+  -h, --help            show this help message and exit
+  -data DIR             path to dataset
+  -dataset-name {stl10,cifar10}
+                        dataset name
+  -a ARCH, --arch ARCH  model architecture: resnet18 | resnet50 (default:
+                        resnet50)
+  -j N, --workers N     number of data loading workers (default: 32)
+  --epochs N            number of total epochs to run
+  -b N, --batch-size N  mini-batch size (default: 256), this is the total
+                        batch size of all GPUs on the current node when using
+                        Data Parallel or Distributed Data Parallel
+  --lr LR, --learning-rate LR
+                        initial learning rate
+  --wd W, --weight-decay W
+                        weight decay (default: 1e-4)
+  --seed SEED           seed for initializing training.
+  --disable-cuda        Disable CUDA
+  --fp16-precision      Whether or not to use 16-bit precision GPU training.
+  --out_dim OUT_DIM     feature dimension (default: 128)
+  --log-every-n-steps LOG_EVERY_N_STEPS
+                        Log every n steps
+  --temperature TEMPERATURE
+                        softmax temperature (default: 0.07)
+  --n-views N           Number of views for contrastive learning training.
+  --gpu-index GPU_INDEX
+                        Gpu index.
