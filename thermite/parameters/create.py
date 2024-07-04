@@ -14,7 +14,7 @@ from typing import (
 
 from attrs import asdict
 
-from thermite.config import Config, Event
+from thermite.config import Config
 from thermite.signatures import (
     CliParamKind,
     ObjSignature,
@@ -217,8 +217,8 @@ def process_function_to_param_group(
 ) -> ParameterGroup:
     obj_sig = process_function_to_obj_signature(func=func)
     # SIG_EXTRACT Event start
-    for cb in config.get_event_cbs(Event.SIG_EXTRACT):
-        obj_sig = cb(obj_sig, func)
+    for cb in config.event_callbacks:
+        obj_sig = cb.sig_extract(obj_sig, func)
     # SIG_EXTRACT Event end
     pg = process_obj_signature_to_param_group(
         obj=func,
@@ -230,8 +230,8 @@ def process_function_to_param_group(
         omit_first=False,
     )
     # PG_POST_CREATE Event start
-    for cb in config.get_event_cbs(Event.PG_POST_CREATE):
-        pg = cb(pg)
+    for cb in config.event_callbacks:
+        pg = cb.pg_post_create(pg)
     # PG_POST_CREATE Event end
     return pg
 
@@ -245,8 +245,8 @@ def process_class_to_param_group(
 ) -> ParameterGroup:
     obj_sig = process_class_to_obj_signature(klass=klass)
     # SIG_EXTRACT Event start
-    for cb in config.get_event_cbs(Event.SIG_EXTRACT):
-        obj_sig = cb(obj_sig, klass)
+    for cb in config.event_callbacks:
+        obj_sig = cb.sig_extract(obj_sig, klass)
     # SIG_EXTRACT Event end
     pg = process_obj_signature_to_param_group(
         obj=klass,
@@ -258,8 +258,8 @@ def process_class_to_param_group(
         omit_first=True,
     )
     # PG_POST_CREATE Event start
-    for cb in config.get_event_cbs(Event.PG_POST_CREATE):
-        pg = cb(pg)
+    for cb in config.event_callbacks:
+        pg = cb.pg_post_create(pg)
     # PG_POST_CREATE Event end
     return pg
 
@@ -273,8 +273,8 @@ def process_instance_to_param_group(
 ) -> ParameterGroup:
     obj_sig = process_instance_to_obj_signature(obj=obj)
     # SIG_EXTRACT Event start
-    for cb in config.get_event_cbs(Event.SIG_EXTRACT):
-        obj_sig = cb(obj_sig, obj)
+    for cb in config.event_callbacks:
+        obj_sig = cb.sig_extract(obj_sig, obj)
     # SIG_EXTRACT Event end
     pg = process_obj_signature_to_param_group(
         obj=lambda: obj,
@@ -286,7 +286,7 @@ def process_instance_to_param_group(
         omit_first=False,
     )
     # PG_POST_CREATE Event start
-    for cb in config.get_event_cbs(Event.PG_POST_CREATE):
-        pg = cb(pg)
+    for cb in config.event_callbacks:
+        pg = cb.pg_post_create(pg)
     # PG_POST_CREATE Event end
     return pg

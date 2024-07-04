@@ -6,7 +6,7 @@ from attrs import field, mutable
 from beartype.door import is_bearable
 from typing_extensions import assert_never
 
-from thermite.config import Event, EventCallbacks, standardize_obj
+from thermite.config import standardize_obj
 from thermite.exceptions import (
     DuplicatedTriggerError,
     MultiParameterError,
@@ -272,5 +272,3 @@ def match_obj_filter_pg(
             return pg
 
     return filtered_callback
-
-EventCallbacks.default_event_obj_filters[Event.PG_POST_CREATE] = match_obj_filter_pg

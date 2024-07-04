@@ -9,7 +9,7 @@ from thermite.exceptions import RichExcHandler, ThermiteExcHandler
 from thermite.plugins.help import help_callback
 
 from .command import CliCallback, Command
-from .config import Config, Event
+from .config import Config
 from .exceptions import CommandError, ParameterError
 
 
@@ -24,21 +24,21 @@ def process_all_args(input_args: List[str], cmd: Command) -> Any:
         if len(input_args) > 0:
             input_args = cmd.process(input_args)
         # CMD_POST_PROCESS Event start
-        for cb in cmd.config.get_event_cbs(Event.CMD_POST_PROCESS):
-            cmd = cb(cmd)
+        for cb in cmd.config.event_callbacks:
+            cmd = cb.cmd_post_process(cmd)
         # CMD_POST_PROCESS Event end
         if len(input_args) > 0:
             subcmd = cmd.get_subcommand(input_args[0])
             input_args = input_args[1:]
             # CMD_POST_CREATE Event start
-            for cb in cmd.config.get_event_cbs(Event.CMD_POST_CREATE):
-                subcmd = cb(subcmd)
+            for cb in cmd.config.event_callbacks:
+                subcmd = cb.cmd_post_create(subcmd)
             # CMD_POST_CREATE Event end
             cmd = subcmd
         else:
             # CMD_FINISH Event start
-            for cb in cmd.config.get_event_cbs(Event.CMD_FINISH):
-                cmd = cb(cmd)
+            for cb in cmd.config.event_callbacks:
+                cmd = cb.cmd_finish(cmd)
             # CMD_FINISH Event end
             try:
                 return cmd.param_group.value
@@ -67,7 +67,7 @@ def run(
         cli_callbacks_top_level = []
 
     if add_help_cb:
-        config.add_cli_callback(help_callback)
+        config.cli_callbacks.append(help_callback)
 
     if exception_handlers is None:
         exception_handlers = []
@@ -80,12 +80,12 @@ def run(
         cmd = Command.from_obj(obj, name=name, config=config)
         cmd.local_cli_callbacks = cli_callbacks_top_level
         # CMD_POST_CREATE Event start
-        for cb in config.get_event_cbs(Event.CMD_POST_CREATE):
-            cmd = cb(cmd)
+        for cb in config.event_callbacks:
+            cmd = cb.cmd_post_create(cmd)
         # CMD_POST_CREATE Event end
         # START_ARGS_PRE_PROCESS Event start
-        for cb in config.get_event_cbs(Event.START_ARGS_PRE_PROCESS):
-            cmd, input_args = cb(cmd, input_args)
+        for cb in config.event_callbacks:
+            cmd, input_args = cb.start_args_pre_process(cmd, input_args)
         # START_ARGS_PRE_PROCESS Event end
         return process_all_args(input_args=input_args, cmd=cmd)
     except Exception as input_e:
@@ -127,9 +127,10 @@ def runner_testing(
         name = obj.__name__
     output = RunOutput(stdout="", stderr="", exit_code=0, exc=None)
     try:
-        with contextlib.redirect_stdout(
-            io.StringIO()
-        ) as rout, contextlib.redirect_stderr(io.StringIO()) as rerr:
+        with (
+            contextlib.redirect_stdout(io.StringIO()) as rout,
+            contextlib.redirect_stderr(io.StringIO()) as rerr,
+        ):
             run(
                 obj=obj,
                 config=config,

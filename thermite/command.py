@@ -20,7 +20,7 @@ from typing import (
 from attrs import field, mutable
 from loguru import logger
 
-from thermite.config import Config, Event, EventCallbacks, standardize_obj
+from thermite.config import Config, standardize_obj
 from thermite.signatures import extract_descriptions
 from thermite.utils import clify_argname
 
@@ -31,7 +31,6 @@ from .parameters import (
     process_function_to_param_group,
     process_instance_to_param_group,
 )
-from .preprocessing import split_and_expand, undeque
 from .type_converters import args_used
 
 
@@ -272,7 +271,3 @@ def match_obj_filter_cmd(
             return cmd
 
     return filtered_callback
-
-
-EventCallbacks.default_event_obj_filters[Event.CMD_POST_CREATE] = match_obj_filter_cmd
-EventCallbacks.default_event_obj_filters[Event.CMD_POST_PROCESS] = match_obj_filter_cmd

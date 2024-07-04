@@ -8,7 +8,6 @@ from attrs import field, mutable
 from loguru import logger
 
 from thermite.command import CliCallback, Command
-from thermite.config import Event
 from thermite.parameters import Argument, ParameterGroup
 
 

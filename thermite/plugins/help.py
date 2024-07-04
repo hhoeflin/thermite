@@ -12,7 +12,7 @@ from rich.table import Table
 from rich.text import Text
 
 from thermite.command import CliCallback, Command
-from thermite.config import Config
+from thermite.config import Config, EventCallback
 from thermite.parameters import (
     Argument,
     MultiConvertTriggerProcessor,
@@ -20,6 +20,16 @@ from thermite.parameters import (
     ParameterGroup,
     TriggerProcessor,
 )
+
+
+class HelpEventCallback(EventCallback):
+    def help_cmd_create(self, cmd: Command, cmd_help: "CommandHelp") -> "CommandHelp":
+        return cmd_help
+
+    def help_pg_create(
+        self, cmd: Command, opt_grp_help: "OptionGroupHelp"
+    ) -> "OptionGroupHelp":
+        return opt_grp_help
 
 
 def clean_type_str(obj) -> str:
@@ -230,8 +240,9 @@ def param_group_to_help_opts_only(
         gen_opts=[option_to_help(x) for x in cli_opts_single],
         opt_groups=[x for x in opt_groups_help if not x.empty],
     )
-    for cb in config.get_event_cbs("HELP_PG_CREATE"):
-        opt_grp_help = cb(pg, opt_grp_help)
+    for cb in config.event_callbacks:
+        if isinstance(cb, HelpEventCallback):
+            opt_grp_help = cb.help_pg_create(pg, opt_grp_help)
 
     return opt_grp_help
 
@@ -318,8 +329,9 @@ def command_to_help(cmd: Command) -> CommandHelp:
         opt_group=opt_group,
         subcommands=subcommands,
     )
-    for cb in cmd.config.get_event_cbs("HELP_CMD_CREATE"):
-        cmd_help = cb(cmd, cmd_help)
+    for cb in cmd.config.event_callbacks:
+        if isinstance(cb, HelpEventCallback):
+            cmd_help = cb.help_cmd_create(cmd, cmd_help)
     return cmd_help
 
 

@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Optional, Type
 from attrs import field, mutable
 from docstring_parser import Docstring, parse
 
-from thermite.config import Event, EventCallbacks, standardize_obj
+from thermite.config import standardize_obj
 
 
 class CliParamKind(Enum):
@@ -159,5 +159,3 @@ def match_obj_filter_sig(
             return sig
 
     return filtered_callback
-
-EventCallbacks.default_event_obj_filters[Event.SIG_EXTRACT] = match_obj_filter_sig

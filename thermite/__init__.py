@@ -2,7 +2,7 @@
 __version__ = "0.1.1"
 
 from .command import CliCallback
-from .config import Config, Event
+from .config import Config, EventCallback
 from .parameters import (
     ConstantTriggerProcessor,
     ConvertTriggerProcessor,
@@ -25,7 +25,7 @@ from .type_converters import BasicCLIArgConverter
 __all__ = [
     "run",
     "Config",
-    "Event",
+    "EventCallback",
     "CliCallback",
     "ObjSignature",
     "ParameterSignature",

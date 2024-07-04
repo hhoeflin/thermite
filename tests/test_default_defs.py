@@ -5,7 +5,7 @@ from typing import List
 from attrs import field, mutable
 
 from thermite.command import Command
-from thermite.config import Config, Event
+from thermite.config import Config
 from thermite.plugins.default_defs import defaults_cli_callback
 from thermite.run import runner_testing
 
