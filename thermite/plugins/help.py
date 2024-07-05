@@ -24,11 +24,13 @@ from thermite.parameters import (
 
 class HelpEventCallback(EventCallback):
     def help_cmd_create(self, cmd: Command, cmd_help: "CommandHelp") -> "CommandHelp":
+        del cmd
         return cmd_help
 
     def help_pg_create(
         self, cmd: Command, opt_grp_help: "OptionGroupHelp"
     ) -> "OptionGroupHelp":
+        del cmd
         return opt_grp_help
 
 

@@ -5,7 +5,8 @@ from typing import List
 from attrs import field, mutable
 
 from thermite.command import Command
-from thermite.config import Config
+from thermite.config import Config, EventCallback
+from thermite.parameters.group import ParameterGroup
 from thermite.plugins.default_defs import defaults_cli_callback
 from thermite.run import runner_testing
 
@@ -14,26 +15,25 @@ from .examples.subcommands import Subcommands
 
 
 @mutable
-class DebugCmdRecord:
+class DebugPgRecord(EventCallback):
     """Class to record the status of cmd during testing."""
 
-    cmd_copies: List[Command] = field(factory=list)
+    copy_post_create: List[ParameterGroup] = field(factory=list)
+    copy_post_process: List[ParameterGroup] = field(factory=list)
 
-    def __call__(self, cmd: Command) -> Command:
-        self.cmd_copies.append(deepcopy(cmd))
+    def cmd_post_create(self, cmd: Command) -> Command:
+        self.copy_post_create.append(deepcopy(cmd.param_group))
+        return cmd
+
+    def cmd_post_process(self, cmd: Command) -> Command:
+        self.copy_post_process.append(deepcopy(cmd.param_group))
         return cmd
 
 
 def test_simple_ex_default_defs():
     config = Config(cli_callbacks=[defaults_cli_callback])
-    cmd_post_create_recorder = DebugCmdRecord()
-    cmd_post_process_recorder = DebugCmdRecord()
-    config.event_callbacks.add_event_cb(
-        event=Event.CMD_POST_CREATE, cb=cmd_post_create_recorder
-    )
-    config.event_callbacks.add_event_cb(
-        event=Event.CMD_POST_PROCESS, cb=cmd_post_process_recorder
-    )
+    pg_recorder = DebugPgRecord()
+    config.event_callbacks.append(pg_recorder)
     output = runner_testing(
         simple_example,
         config=config,
@@ -46,30 +46,28 @@ def test_simple_ex_default_defs():
 
     # now check that at the beginning, the defaults where not there
     # and afterwards they were changed
-    cmd_before = cmd_post_create_recorder.cmd_copies[0]
-    cmd_after = cmd_post_process_recorder.cmd_copies[0]
+    assert len(pg_recorder.copy_post_create) > 0
+    pg_before = pg_recorder.copy_post_create[0]
+    assert len(pg_recorder.copy_post_process) > 0
+    pg_after = pg_recorder.copy_post_process[0]
+
     # values before were unset
-    cmd_before.param_group["param1"].default_value == ...
-    cmd_before.param_group["param2"].default_value == ...
-    cmd_before.param_group["param3"].default_value == ...
-    cmd_before.param_group["param4"].default_value == ...
+    assert pg_before["param1"].default_value == ...
+    assert pg_before["param2"].default_value == ...
+    assert pg_before["param3"].default_value == ...
+    assert pg_before["param4"].default_value == ...
     # values after were changed
-    cmd_after.param_group["param1"].default_value == "foo"
-    cmd_after.param_group["param2"].default_value == 3
-    cmd_after.param_group["param3"].default_value == [1, 2]
-    cmd_after.param_group["param4"].default_value == Path("foobar/file")
+    assert pg_after is not None
+    assert pg_after["param1"].default_value == "foo"
+    assert pg_after["param2"].default_value == 3
+    assert pg_after["param3"].default_value == [1, 2]
+    assert pg_after["param4"].default_value == Path("foobar/file")
 
 
 def test_subcmds_ex_default_defs():
     config = Config(cli_callbacks=[defaults_cli_callback])
-    cmd_post_create_recorder = DebugCmdRecord()
-    cmd_post_process_recorder = DebugCmdRecord()
-    config.event_callbacks.add_event_cb(
-        event=Event.CMD_POST_CREATE, cb=cmd_post_create_recorder
-    )
-    config.event_callbacks.add_event_cb(
-        event=Event.CMD_POST_PROCESS, cb=cmd_post_process_recorder
-    )
+    pg_recorder = DebugPgRecord()
+    config.event_callbacks.append(pg_recorder)
     output = runner_testing(
         Subcommands,
         config=config,
@@ -89,9 +87,11 @@ def test_subcmds_ex_default_defs():
 
     # now check that at the beginning, the defaults where not there
     # and afterwards they were changed
-    cmd_before = cmd_post_create_recorder.cmd_copies[1]
-    cmd_after = cmd_post_process_recorder.cmd_copies[1]
+    assert len(pg_recorder.copy_post_create) > 1
+    pg_before = pg_recorder.copy_post_create[1]
+    assert len(pg_recorder.copy_post_process) > 1
+    pg_after = pg_recorder.copy_post_process[1]
     # values before were unset
-    cmd_before.param_group["param1"].default_value == ...
+    assert pg_before["param1"].default_value == ...
     # values after were changed
-    cmd_after.param_group["param1"].default_value == "foo"
+    assert pg_after["param1"].default_value == "foo"

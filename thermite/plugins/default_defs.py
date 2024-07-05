@@ -8,6 +8,7 @@ from attrs import field, mutable
 from loguru import logger
 
 from thermite.command import CliCallback, Command
+from thermite.config import EventCallback
 from thermite.parameters import Argument, ParameterGroup
 
 
@@ -160,13 +161,13 @@ def transfer_values_to_defaults(
 
 
 @mutable
-class ApplyDefaultsCommandCallback:
+class ApplyDefaultsCommandCallback(EventCallback):
     default_defs: DefaultDefs
 
     def __attrs_post_init__(self):
         self.default_defs.check()
 
-    def __call__(self, cmd: Command) -> Command:
+    def cmd_post_create(self, cmd: Command) -> Command:
         cmd_call_hierarachy = get_hierarchy(cmd)
         # we retrieve the appropriate subcmd
         subcmd_default_defs = retrieve_default_defs_subcmd(
@@ -223,10 +224,8 @@ def read_default_defs_cb_func(cmd: Command, default_defs_path_str: str):
     # now set the event at each command creation to adapt the defaults
     # also, for the current cmd it has to be applied here directly
     apply_defaults_cb = ApplyDefaultsCommandCallback(default_defs)
-    apply_defaults_cb(cmd)
-    cmd.config.event_callbacks.add_event_cb(
-        event=Event.CMD_POST_CREATE, cb=apply_defaults_cb
-    )
+    apply_defaults_cb.cmd_post_create(cmd)
+    cmd.config.event_callbacks.append(apply_defaults_cb)
 
 
 defaults_cli_callback = CliCallback(
@@ -235,5 +234,4 @@ defaults_cli_callback = CliCallback(
     descr="Read defaults from file",
     num_req_args=1,
 )
-
 # TODO: Use START_ARGS_PRE_PROCESS event
